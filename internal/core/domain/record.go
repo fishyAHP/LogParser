@@ -15,8 +15,13 @@ type RecordData struct {
 	Pointer RecordPointer
 }
 
-func NewRecordData(length, segmentID uint32, offset uint64, recordID uuid.UUID) RecordData {
-	return RecordData{
+func NewRecordData(
+	length uint32,
+	segmentID uint32,
+	offset uint64,
+	recordID uuid.UUID,
+) *RecordData {
+	return &RecordData{
 		ID: recordID,
 		Pointer: RecordPointer{
 			Offset:    offset,

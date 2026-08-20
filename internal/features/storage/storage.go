@@ -1,6 +1,11 @@
 package features_storage
 
 import (
+	"fmt"
+	"os"
+	"strconv"
+	"time"
+
 	"fishyAHP/LogParser.git/internal/core/domain"
 )
 
@@ -11,17 +16,67 @@ type Storage struct {
 }
 
 // New создает или открывает директорию, затем находит последний сегмент.
-// После этого определяет его как активный в случае если он не заполнен слишком сильно.
+// После этого определяет его как активный, в случае если он не заполнен слишком сильно.
 // Если сегментов нет, то создает новый.
+// Если размер последнего сегмента больше максимального заданного значения, то надо создать новый.
 func New(path string) (*Storage, error) {
-	return nil, nil
+	if _, err := time.Parse("2006-01-02/15", path); err != nil {
+		return nil, fmt.Errorf("time parse path: %w", err)
+	}
+
+	// os.MkdirAll открывает нужную директорию или создает все директории на указанном пути,
+	// если их не было. Права дает создателю все возможности, а остальным возможность читать
+	// и выполнять
+	err := os.MkdirAll(path, 0o755)
+	if err != nil {
+		return nil, fmt.Errorf("mk dir all: %w", err)
+	}
+
+	// os.ReadDir возвращает отсортированный слайс директорий или файлов.
+	// В нашем случае в качестве аргумента передается полный путь формата: 2006-01-02/15
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return nil, fmt.Errorf("read dir: %w", err)
+	}
+
+	id := 1
+	if len(entries) != 0 {
+		// Последний элемент должен иметь название с самым большим индексом,
+		// так как слайс был отсортирован по названиям
+		last := entries[len(entries)-1]
+		id, err = strconv.Atoi(last.Name()[8:])
+
+		if err != nil {
+			return nil, fmt.Errorf("conversion string to int(atoi): %w", err)
+		}
+	}
+
+	segment, err := newSegment(path, uint32(id))
+	if err != nil {
+		return nil, fmt.Errorf("create new segment: %w", err)
+	}
+
+	if segment.isOverloaded(0) {
+		if err = segment.Close(); err != nil {
+			return nil, fmt.Errorf("close old segment: %w", err)
+		}
+
+		if segment, err = newSegment(path, uint32(id+1)); err != nil {
+			return nil, fmt.Errorf("create not overloaded segment: %w", err)
+		}
+	}
+
+	return &Storage{
+		dir:           path,
+		activeSegment: segment,
+	}, nil
 }
 
-func (s *Storage) Write(data []byte) (domain.RecordData, error) {
+func (s *Storage) Write(data []byte) (*domain.RecordData, error) {
 	return s.activeSegment.Write(data)
 }
 
-func (s *Storage) Read(pointer domain.RecordData) (data []byte, err error) {
+func (s *Storage) Read(pointer *domain.RecordData) (data []byte, err error) {
 	return nil, nil
 }
 
