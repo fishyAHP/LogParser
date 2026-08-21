@@ -96,6 +96,7 @@ func (s *Segment) Write(data []byte) (*domain.RecordData, error) {
 		uint32(n),
 		s.ID,
 		uint64(s.Size),
+		s.File.Name(),
 		uuid.New(),
 	)
 	s.Size += fileSize(n)

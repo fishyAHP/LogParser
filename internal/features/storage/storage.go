@@ -74,30 +74,67 @@ func New(path string) (*Storage, error) {
 
 func (s *Storage) Write(data []byte) (*domain.RecordData, error) {
 	if s.activeSegment.isOverloaded(fileSize(len(data))) {
-		if err := s.rotationSegment(); err != nil {
+		if err := s.rotationSegment(
+			s.dir,
+			s.activeSegment.ID+1,
+		); err != nil {
 			return nil, fmt.Errorf("write segment: %w", err)
 		}
 	}
 
-	return s.activeSegment.Write(data)
+	rd, err := s.activeSegment.Write(data)
+	if err != nil {
+		return nil, fmt.Errorf("write segment: %w", err)
+	}
+
+	return rd, nil
 }
 
 func (s *Storage) Read(pointer *domain.RecordData) (data []byte, err error) {
-	return s.activeSegment.Read(pointer)
+	if err = s.openPointer(pointer); err != nil {
+		return nil, fmt.Errorf("read storage: %w", err)
+	}
+
+	data, err = s.activeSegment.Read(pointer)
+	if err != nil {
+		return nil, fmt.Errorf("read storage: %w", err)
+	}
+
+	return
 }
 
 func (s *Storage) Close() error {
-	return s.activeSegment.Close()
+	if err := s.activeSegment.Close(); err != nil {
+		return fmt.Errorf("close storage: %w", err)
+	}
+
+	return nil
 }
 
-func (s *Storage) rotationSegment() error {
+func (s *Storage) openPointer(pointer *domain.RecordData) error {
+	newDir := s.dir
+	if s.dir != pointer.Pointer.Directory {
+		newDir = pointer.Pointer.Directory
+	}
+
+	if err := s.rotationSegment(
+		newDir,
+		pointer.Pointer.SegmentID,
+	); err != nil {
+		return fmt.Errorf("open pointer: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Storage) rotationSegment(dir string, id uint32) error {
 	if err := s.activeSegment.Close(); err != nil {
 		return fmt.Errorf("rotation segment: %w", err)
 	}
 
 	newActiveSegment, err := newSegment(
-		s.dir,
-		s.activeSegment.ID+1,
+		dir,
+		id,
 	)
 
 	if err != nil {
@@ -105,5 +142,6 @@ func (s *Storage) rotationSegment() error {
 	}
 
 	s.activeSegment = newActiveSegment
+	s.dir = dir
 	return nil
 }

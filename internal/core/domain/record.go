@@ -7,6 +7,7 @@ type RecordPointer struct {
 	Offset    uint64
 	Length    uint32
 	SegmentID uint32
+	Directory string
 }
 
 // RecordData объединение физического и логического местоположения записи
@@ -19,6 +20,7 @@ func NewRecordData(
 	length uint32,
 	segmentID uint32,
 	offset uint64,
+	path string,
 	recordID uuid.UUID,
 ) *RecordData {
 	return &RecordData{
@@ -27,6 +29,7 @@ func NewRecordData(
 			Offset:    offset,
 			Length:    length,
 			SegmentID: segmentID,
+			Directory: path,
 		},
 	}
 }
