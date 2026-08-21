@@ -73,17 +73,37 @@ func New(path string) (*Storage, error) {
 }
 
 func (s *Storage) Write(data []byte) (*domain.RecordData, error) {
+	if s.activeSegment.isOverloaded(fileSize(len(data))) {
+		if err := s.rotationSegment(); err != nil {
+			return nil, fmt.Errorf("write segment: %w", err)
+		}
+	}
+
 	return s.activeSegment.Write(data)
 }
 
 func (s *Storage) Read(pointer *domain.RecordData) (data []byte, err error) {
-	return nil, nil
+	return s.activeSegment.Read(pointer)
 }
 
 func (s *Storage) Close() error {
-	return nil
+	return s.activeSegment.Close()
 }
 
-func (s *Storage) rotationSegment() {
+func (s *Storage) rotationSegment() error {
+	if err := s.activeSegment.Close(); err != nil {
+		return fmt.Errorf("rotation segment: %w", err)
+	}
 
+	newActiveSegment, err := newSegment(
+		s.dir,
+		s.activeSegment.ID+1,
+	)
+
+	if err != nil {
+		return fmt.Errorf("rotation segment: %w", err)
+	}
+
+	s.activeSegment = newActiveSegment
+	return nil
 }

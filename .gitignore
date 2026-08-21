@@ -33,3 +33,4 @@ go.work.sum
 
 # Local meta data
 metadata/
+.gitignore
