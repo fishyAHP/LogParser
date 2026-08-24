@@ -112,6 +112,11 @@ func (s *Storage) Close() error {
 }
 
 func (s *Storage) openPointer(pointer *domain.RecordData) error {
+	if filepath.Join(s.dir, strconv.Itoa(int(s.activeSegment.ID))) ==
+		filepath.Join(pointer.Pointer.Directory, strconv.Itoa(int(pointer.Pointer.SegmentID))) {
+		return nil
+	}
+
 	newDir := s.dir
 	if s.dir != pointer.Pointer.Directory {
 		newDir = pointer.Pointer.Directory
