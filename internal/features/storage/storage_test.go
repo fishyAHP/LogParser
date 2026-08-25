@@ -1,1 +1,1 @@
-package features_storage
+package storage

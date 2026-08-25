@@ -7,7 +7,7 @@ type RecordPointer struct {
 	Offset    uint64
 	Length    uint32
 	SegmentID uint32
-	Directory string
+	Path      string
 }
 
 // RecordData объединение физического и логического местоположения записи
@@ -29,7 +29,7 @@ func NewRecordData(
 			Offset:    offset,
 			Length:    length,
 			SegmentID: segmentID,
-			Directory: path,
+			Path:      path,
 		},
 	}
 }

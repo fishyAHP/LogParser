@@ -1,4 +1,4 @@
-package features_storage
+package storage
 
 import (
 	"errors"
@@ -33,8 +33,8 @@ func (f fileSize) String() string {
 	}
 }
 
-// Segment представляет собой файл, в который сейчас происходит запись
-type Segment struct {
+// segment представляет собой файл, в который сейчас происходит запись
+type segment struct {
 	ID   uint32
 	Size fileSize
 	File *os.File
@@ -43,8 +43,8 @@ type Segment struct {
 // newSegment создает/открывает файл, дает ему номер/название,
 // если его не было.
 // Также определяет его текущий размер.
-func newSegment(dir string, id uint32) (*Segment, error) {
-	// filepath.Join соединяет несколько строк в один путь для файла.
+func newSegment(dir string, id uint32) (*segment, error) {
+	// filepath.Join конкатенирует несколько строк в файловый путь.
 	// После того как сделаем интеграцию парсера и хранилища уберем эту обработку туда
 	path := filepath.Join(
 		dir,
@@ -56,7 +56,7 @@ func newSegment(dir string, id uint32) (*Segment, error) {
 	// что указатель записи в файл ставить в его конец.
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0o644)
 	if err != nil {
-		return &Segment{}, fmt.Errorf("open file: %w", err)
+		return &segment{}, fmt.Errorf("open file: %w", err)
 	}
 
 	defer func() {
@@ -71,21 +71,21 @@ func newSegment(dir string, id uint32) (*Segment, error) {
 
 	stat, err := file.Stat()
 	if err != nil {
-		return &Segment{}, fmt.Errorf("stat file: %w", err)
+		return &segment{}, fmt.Errorf("stat file: %w", err)
 	}
 
-	return &Segment{
+	return &segment{
 		ID:   id,
 		Size: fileSize(stat.Size()),
 		File: file,
 	}, nil
 }
 
-func (s *Segment) isOverloaded(size fileSize) bool {
+func (s *segment) isOverloaded(size fileSize) bool {
 	return float64(s.Size+size)/float64(MaxSegmentSize) >= loadFactor
 }
 
-func (s *Segment) Write(data []byte) (*domain.RecordData, error) {
+func (s *segment) Write(data []byte) (*domain.RecordData, error) {
 	n, err := s.File.Write(data)
 	if err != nil {
 		return &domain.RecordData{},
@@ -104,7 +104,7 @@ func (s *Segment) Write(data []byte) (*domain.RecordData, error) {
 	return rd, nil
 }
 
-func (s *Segment) Read(rd *domain.RecordData) (data []byte, err error) {
+func (s *segment) Read(rd *domain.RecordData) (data []byte, err error) {
 	if s.ID != rd.Pointer.SegmentID {
 		return nil, errors.New("segment read: not suitable record data")
 	}
@@ -124,10 +124,15 @@ func (s *Segment) Read(rd *domain.RecordData) (data []byte, err error) {
 	return
 }
 
-func (s *Segment) Close() error {
+func (s *segment) Close() error {
 	if err := s.File.Close(); err != nil {
 		return fmt.Errorf("close segment file: %w", err)
 	}
 
+	s.ID = 0
 	return nil
+}
+
+func (s *segment) IsOpen() bool {
+	return s.ID != 0
 }

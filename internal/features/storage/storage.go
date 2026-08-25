@@ -1,19 +1,26 @@
-package features_storage
+package storage
 
 import (
 	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"time"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
 )
 
-// Storage это директория в которую сейчас ведется запись
+// Storage это описание системы управления сегментами, или файлами,
+// в которые записываются логи или откуда они читаются.
 type Storage struct {
-	dir           string
-	activeSegment *Segment
+	dir string
+
+	readSegment  *segment
+	writeSegment *segment
+
+	readMtx  sync.Mutex
+	writeMtx sync.Mutex
 }
 
 // New создает или открывает директорию, затем находит последний сегмент.
@@ -21,7 +28,7 @@ type Storage struct {
 // Если сегментов нет, то создает новый.
 // Если размер последнего сегмента больше максимального заданного значения, то надо создать новый.
 func New(path string) (*Storage, error) {
-	if _, err := time.Parse("2006-01-02/15", path); err != nil {
+	if _, err := time.Parse("storage/logs/2006-01-02/15", path); err != nil {
 		return nil, fmt.Errorf("time parse path: %w", err)
 	}
 
@@ -34,7 +41,7 @@ func New(path string) (*Storage, error) {
 	}
 
 	// os.ReadDir возвращает отсортированный слайс директорий или файлов.
-	// В нашем случае в качестве аргумента передается полный путь формата: 2006-01-02/15
+	// В нашем случае в качестве аргумента передается путь формата: 2006-01-02/15
 	entries, err := os.ReadDir(path)
 	if err != nil {
 		return nil, fmt.Errorf("read dir: %w", err)
@@ -52,38 +59,39 @@ func New(path string) (*Storage, error) {
 		}
 	}
 
-	segment, err := newSegment(path, uint32(id))
+	writer, err := newSegment(path, uint32(id))
 	if err != nil {
-		return nil, fmt.Errorf("create new segment: %w", err)
+		return nil, fmt.Errorf("create new writer: %w", err)
 	}
 
-	if segment.isOverloaded(0) {
-		if err = segment.Close(); err != nil {
-			return nil, fmt.Errorf("close old segment: %w", err)
+	if writer.isOverloaded(0) {
+		if err = writer.Close(); err != nil {
+			return nil, fmt.Errorf("close old writer: %w", err)
 		}
 
-		if segment, err = newSegment(path, uint32(id+1)); err != nil {
-			return nil, fmt.Errorf("create not overloaded segment: %w", err)
+		if writer, err = newSegment(path, uint32(id+1)); err != nil {
+			return nil, fmt.Errorf("create not overloaded writer: %w", err)
 		}
 	}
 
 	return &Storage{
-		dir:           path,
-		activeSegment: segment,
+		dir:          path,
+		writeSegment: writer,
+		readSegment:  &segment{},
 	}, nil
 }
 
 func (s *Storage) Write(data []byte) (*domain.RecordData, error) {
-	if s.activeSegment.isOverloaded(fileSize(len(data))) {
-		if err := s.rotationSegment(
-			s.dir,
-			s.activeSegment.ID+1,
-		); err != nil {
+	s.writeMtx.Lock()
+	defer s.writeMtx.Unlock()
+
+	if s.writeSegment.isOverloaded(fileSize(len(data))) {
+		if err := s.rotationSegment(); err != nil {
 			return nil, fmt.Errorf("write segment: %w", err)
 		}
 	}
 
-	rd, err := s.activeSegment.Write(data)
+	rd, err := s.writeSegment.Write(data)
 	if err != nil {
 		return nil, fmt.Errorf("write segment: %w", err)
 	}
@@ -92,11 +100,14 @@ func (s *Storage) Write(data []byte) (*domain.RecordData, error) {
 }
 
 func (s *Storage) Read(pointer *domain.RecordData) (data []byte, err error) {
+	s.readMtx.Lock()
+	defer s.readMtx.Unlock()
+
 	if err = s.openPointer(pointer); err != nil {
 		return nil, fmt.Errorf("read storage: %w", err)
 	}
 
-	data, err = s.activeSegment.Read(pointer)
+	data, err = s.readSegment.Read(pointer)
 	if err != nil {
 		return nil, fmt.Errorf("read storage: %w", err)
 	}
@@ -105,49 +116,65 @@ func (s *Storage) Read(pointer *domain.RecordData) (data []byte, err error) {
 }
 
 func (s *Storage) Close() error {
-	if err := s.activeSegment.Close(); err != nil {
-		return fmt.Errorf("close storage: %w", err)
+	s.readMtx.Lock()
+	defer s.readMtx.Unlock()
+
+	if s.readSegment.IsOpen() {
+		if err := s.readSegment.Close(); err != nil {
+			return fmt.Errorf("close read segment: %w", err)
+		}
+	}
+
+	s.writeMtx.Lock()
+	defer s.writeMtx.Unlock()
+
+	if s.writeSegment.IsOpen() {
+		if err := s.writeSegment.Close(); err != nil {
+			return fmt.Errorf("close write segment: %w", err)
+		}
 	}
 
 	return nil
 }
 
 func (s *Storage) openPointer(pointer *domain.RecordData) error {
-	if filepath.Join(s.dir, strconv.Itoa(int(s.activeSegment.ID))) ==
-		filepath.Join(pointer.Pointer.Directory, strconv.Itoa(int(pointer.Pointer.SegmentID))) {
-		return nil
+	if s.readSegment.IsOpen() {
+		if filepath.Join(s.dir, strconv.Itoa(int(s.readSegment.ID))) ==
+			filepath.Join(pointer.Pointer.Path, strconv.Itoa(int(pointer.Pointer.SegmentID))) {
+			return nil
+		}
+
+		if err := s.readSegment.Close(); err != nil {
+			return fmt.Errorf("open pointer: %w", err)
+		}
 	}
 
-	newDir := s.dir
-	if s.dir != pointer.Pointer.Directory {
-		newDir = pointer.Pointer.Directory
-	}
-
-	if err := s.rotationSegment(
-		newDir,
+	newReader, err := newSegment(
+		pointer.Pointer.Path,
 		pointer.Pointer.SegmentID,
-	); err != nil {
+	)
+	if err != nil {
 		return fmt.Errorf("open pointer: %w", err)
 	}
 
+	s.readSegment = newReader
 	return nil
 }
 
-func (s *Storage) rotationSegment(dir string, id uint32) error {
-	if err := s.activeSegment.Close(); err != nil {
+func (s *Storage) rotationSegment() error {
+	if err := s.writeSegment.Close(); err != nil {
 		return fmt.Errorf("rotation segment: %w", err)
 	}
 
-	newActiveSegment, err := newSegment(
-		dir,
-		id,
+	newWriter, err := newSegment(
+		s.dir,
+		s.writeSegment.ID+1,
 	)
-
+	// Узкое место, если тут будет ошибка, то у нас останется только закрытый сегмент для записи
 	if err != nil {
 		return fmt.Errorf("rotation segment: %w", err)
 	}
 
-	s.activeSegment = newActiveSegment
-	s.dir = dir
+	s.writeSegment = newWriter
 	return nil
 }
