@@ -28,7 +28,10 @@ type Storage struct {
 // Если сегментов нет, то создает новый.
 // Если размер последнего сегмента больше максимального заданного значения, то надо создать новый.
 func New(path string) (*Storage, error) {
-	if _, err := time.Parse("storage/logs/2006-01-02/15", path); err != nil {
+	if _, err := time.Parse(
+		"storage/logs/2006-01-02/15",
+		path[len(path)-len("storage/logs/2006-01-02/15"):],
+	); err != nil {
 		return nil, fmt.Errorf("time parse path: %w", err)
 	}
 
@@ -85,7 +88,7 @@ func (s *Storage) Write(data []byte) (*domain.RecordData, error) {
 	s.writeMtx.Lock()
 	defer s.writeMtx.Unlock()
 
-	if s.writeSegment.isOverloaded(fileSize(len(data))) {
+	if s.writeSegment.isOverloaded(FileSize(len(data))) {
 		if err := s.rotationSegment(); err != nil {
 			return nil, fmt.Errorf("write segment: %w", err)
 		}
@@ -162,13 +165,14 @@ func (s *Storage) openPointer(pointer *domain.RecordData) error {
 }
 
 func (s *Storage) rotationSegment() error {
+	oldID := s.writeSegment.ID
 	if err := s.writeSegment.Close(); err != nil {
 		return fmt.Errorf("rotation segment: %w", err)
 	}
 
 	newWriter, err := newSegment(
 		s.dir,
-		s.writeSegment.ID+1,
+		oldID+1,
 	)
 	// Узкое место, если тут будет ошибка, то у нас останется только закрытый сегмент для записи
 	if err != nil {
