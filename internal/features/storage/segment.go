@@ -11,10 +11,10 @@ import (
 	"github.com/google/uuid"
 )
 
-type fileSize uint64
+type FileSize uint64
 
 const (
-	Byte           fileSize = 1
+	Byte           FileSize = 1
 	KByte                   = 1024 * Byte
 	MByte                   = 1024 * KByte
 	MaxSegmentSize          = 100 * MByte
@@ -22,7 +22,7 @@ const (
 	loadFactor = 87.5 / 100
 )
 
-func (f fileSize) String() string {
+func (f FileSize) String() string {
 	switch {
 	case f >= MByte:
 		return fmt.Sprintf("%.2fmb", float64(f)/float64(MByte))
@@ -36,8 +36,8 @@ func (f fileSize) String() string {
 // segment представляет собой файл, в который сейчас происходит запись
 type segment struct {
 	ID   uint32
-	Size fileSize
-	File *os.File
+	size FileSize
+	file *os.File
 }
 
 // newSegment создает/открывает файл, дает ему номер/название,
@@ -56,7 +56,7 @@ func newSegment(dir string, id uint32) (*segment, error) {
 	// что указатель записи в файл ставить в его конец.
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0o644)
 	if err != nil {
-		return &segment{}, fmt.Errorf("open file: %w", err)
+		return &segment{}, fmt.Errorf("open segment: %w", err)
 	}
 
 	defer func() {
@@ -71,22 +71,22 @@ func newSegment(dir string, id uint32) (*segment, error) {
 
 	stat, err := file.Stat()
 	if err != nil {
-		return &segment{}, fmt.Errorf("stat file: %w", err)
+		return &segment{}, fmt.Errorf("stat segment: %w", err)
 	}
 
 	return &segment{
 		ID:   id,
-		Size: fileSize(stat.Size()),
-		File: file,
+		size: FileSize(stat.Size()),
+		file: file,
 	}, nil
 }
 
-func (s *segment) isOverloaded(size fileSize) bool {
-	return float64(s.Size+size)/float64(MaxSegmentSize) >= loadFactor
+func (s *segment) isOverloaded(size FileSize) bool {
+	return float64(s.size+size)/float64(MaxSegmentSize) >= loadFactor
 }
 
 func (s *segment) Write(data []byte) (*domain.RecordData, error) {
-	n, err := s.File.Write(data)
+	n, err := s.file.Write(data)
 	if err != nil {
 		return &domain.RecordData{},
 			fmt.Errorf("write segment file: %w", err)
@@ -95,11 +95,11 @@ func (s *segment) Write(data []byte) (*domain.RecordData, error) {
 	rd := domain.NewRecordData(
 		uint32(n),
 		s.ID,
-		uint64(s.Size),
-		s.File.Name(),
+		uint64(s.size),
+		filepath.Dir(s.file.Name()),
 		uuid.New(),
 	)
-	s.Size += fileSize(n)
+	s.size += FileSize(n)
 
 	return rd, nil
 }
@@ -109,7 +109,7 @@ func (s *segment) Read(rd *domain.RecordData) (data []byte, err error) {
 		return nil, errors.New("segment read: not suitable record data")
 	}
 
-	if _, err = s.File.Seek(
+	if _, err = s.file.Seek(
 		int64(rd.Pointer.Offset),
 		io.SeekStart,
 	); err != nil {
@@ -117,7 +117,7 @@ func (s *segment) Read(rd *domain.RecordData) (data []byte, err error) {
 	}
 
 	data = make([]byte, rd.Pointer.Length)
-	if _, err = io.ReadFull(s.File, data); err != nil {
+	if _, err = io.ReadFull(s.file, data); err != nil {
 		return nil, fmt.Errorf("read segment file: %w", err)
 	}
 
@@ -125,7 +125,7 @@ func (s *segment) Read(rd *domain.RecordData) (data []byte, err error) {
 }
 
 func (s *segment) Close() error {
-	if err := s.File.Close(); err != nil {
+	if err := s.file.Close(); err != nil {
 		return fmt.Errorf("close segment file: %w", err)
 	}
 
