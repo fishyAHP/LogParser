@@ -1,15 +1,25 @@
 package index
 
 import (
-	"fishyAHP/LogParser.git/internal/features/index/component"
-	"fishyAHP/LogParser.git/internal/features/index/level"
-	"fishyAHP/LogParser.git/internal/features/index/pid"
 	"fishyAHP/LogParser.git/internal/features/index/timestamp"
 )
 
+type PID = uint32
+type LogComponent = string
+
+type LogLevel string
+
+const (
+	Debug LogLevel = "DEBUG"
+	Info  LogLevel = "INFO"
+	Warn  LogLevel = "WARN"
+	Error LogLevel = "ERROR"
+	Fatal LogLevel = "FATAL"
+)
+
 type Indexer struct {
-	level     *level.Index
-	component *component.Index
-	pid       *pid.Index
+	level     *Index[LogLevel]
+	component *Index[LogComponent]
+	pid       *Index[PID]
 	timestamp *timestamp.Index
 }
