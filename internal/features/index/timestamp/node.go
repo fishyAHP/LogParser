@@ -1,24 +1,37 @@
 package timestamp
 
 import (
+	"slices"
 	"time"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
 )
 
-type Color int
+type color int
 
 const (
-	Black Color = iota
-	Red
+	Red color = iota
+	Black
 )
 
-type Node struct {
+type node struct {
 	key     time.Time
 	records []domain.RecordData
 
-	left, right *Node
-	parent      *Node
+	left, right *node
+	parent      *node
 
-	color Color
+	color color
+}
+
+func newNode(key time.Time, value domain.RecordData) *node {
+	return &node{
+		key:     key,
+		records: []domain.RecordData{value},
+		color:   Black,
+	}
+}
+
+func (n *node) add(value domain.RecordData) {
+	n.records = slices.Clone(append(n.records, value))
 }

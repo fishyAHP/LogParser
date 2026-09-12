@@ -4,6 +4,6 @@ type Index struct {
 	tree *rbTree
 }
 
-func New() Index {
-	return Index{}
+func New() *Index {
+	return &Index{}
 }
