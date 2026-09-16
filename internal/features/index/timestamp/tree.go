@@ -1,7 +1,6 @@
 package timestamp
 
 import (
-	"cmp"
 	"errors"
 	"time"
 
@@ -23,10 +22,17 @@ func newRBTree() *rbTree {
 // 1 if k1 more than k2
 // it need to find place for insert in rb-tree
 func compare(k1, k2 time.Time) int {
-	m1 := k1.Minute()
-	m2 := k2.Minute()
+	k1 = k1.Truncate(time.Minute)
+	k2 = k2.Truncate(time.Minute)
 
-	return cmp.Compare(m1, m2)
+	switch {
+	case k1.Before(k2):
+		return -1
+	case k1.After(k2):
+		return 1
+	default:
+		return 0
+	}
 }
 
 func (t *rbTree) Add(key time.Time, value domain.RecordData) (err error) {
@@ -95,31 +101,29 @@ func (t *rbTree) fixInsert(n *node) {
 			grandparent := parent.parent
 			switch parent {
 			case grandparent.left:
-				if n == parent.right {
+				if n == parent.left {
+					t.rightRotate(parent)
+					parent.color = Black
+				} else {
 					t.leftRotate(n)
-				}
-				t.rightRotate(n)
-
-				grandparent.color = Red
-				if n == parent.left {
-					parent.color = Black
-				} else {
-					n.color = Black
-				}
-			case grandparent.right:
-				if n == parent.left {
 					t.rightRotate(n)
-				}
-				t.leftRotate(n)
-
-				grandparent.color = Red
-				if n == parent.right {
-					parent.color = Black
-				} else {
 					n.color = Black
 				}
+
+				grandparent.color = Red
+			case grandparent.right:
+				if n == parent.right {
+					t.leftRotate(parent)
+					parent.color = Black
+				} else {
+					t.rightRotate(n)
+					t.leftRotate(n)
+					n.color = Black
+				}
+
+				grandparent.color = Red
 			}
-		} else {
+		} else if uncle.color == Red {
 			parent.color = Black
 			uncle.color = Black
 			uncle.parent.color = Red
@@ -129,38 +133,39 @@ func (t *rbTree) fixInsert(n *node) {
 	}
 }
 
-func (t *rbTree) leftRotate(n *node) {
-	if n.parent == nil ||
-		n != n.parent.right {
+func (t *rbTree) leftRotate(child *node) {
+	if child.parent == nil ||
+		child != child.parent.right {
 		return
 	}
 
-	parent := n.parent
+	parent := child.parent
 	if parent == t.root {
-		t.root = n
+		t.root = child
 	}
 
-	if n.left != nil {
-		n.left.parent = parent
+	if child.left != nil {
+		child.left.parent = parent
 	}
-	parent.right = n.left
+	parent.right = child.left
 
 	grandparent := parent.parent
-	parent.parent = n
+	parent.parent = child
 	if grandparent != nil {
 		if parent == grandparent.left {
-			grandparent.left = n
+			grandparent.left = child
 		} else {
-			grandparent.right = n
+			grandparent.right = child
 		}
 	}
 
-	n.parent = grandparent
-	n.left = parent
+	child.parent = grandparent
+	child.left = parent
 }
 
 func (t *rbTree) rightRotate(n *node) {
-	if n != n.parent.left {
+	if n.parent == nil ||
+		n != n.parent.left {
 		return
 	}
 
