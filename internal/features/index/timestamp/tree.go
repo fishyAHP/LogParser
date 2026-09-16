@@ -55,9 +55,9 @@ func (t *rbTree) Add(key time.Time, value domain.RecordData) (err error) {
 	}()
 
 	for {
-		cmpr := compare(key, current.key)
+		cmp := compare(key, current.key)
 
-		switch cmpr {
+		switch cmp {
 		case -1:
 			if current.left != nil {
 				current = current.left
@@ -191,4 +191,23 @@ func (t *rbTree) rightRotate(n *node) {
 
 	n.parent = grandparent
 	n.right = parent
+}
+
+func (t *rbTree) Find(key time.Time) ([]domain.RecordData, bool) {
+	cur := t.root
+
+	for cur != nil {
+		cmp := compare(key, cur.key)
+
+		switch cmp {
+		case 1:
+			cur = cur.right
+		case -1:
+			cur = cur.left
+		default:
+			return cur.records, true
+		}
+	}
+
+	return nil, false
 }
