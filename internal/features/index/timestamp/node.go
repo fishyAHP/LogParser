@@ -7,7 +7,7 @@ import (
 	"fishyAHP/LogParser.git/internal/core/domain"
 )
 
-type color int
+type color uint
 
 const (
 	Red color = iota
@@ -28,10 +28,19 @@ func newNode(key time.Time, value domain.RecordData) *node {
 	return &node{
 		key:     key,
 		records: []domain.RecordData{value},
-		color:   Black,
+		color:   Red,
 	}
 }
 
 func (n *node) add(value domain.RecordData) {
 	n.records = slices.Clone(append(n.records, value))
+}
+
+func (n *node) uncle() *node {
+	parent := n.parent
+
+	if parent.left == n {
+		return parent.right
+	}
+	return parent.left
 }
