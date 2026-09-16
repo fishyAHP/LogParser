@@ -14,7 +14,7 @@ func TestAddFirstNode(t *testing.T) {
 	value := domain.RecordData{}
 
 	if err := tree.Add(key, value); err != nil {
-		t.Fatalf("Add() error = %v", err)
+		t.Fatalf("Index() error = %v", err)
 	}
 
 	if tree.root == nil {
@@ -41,7 +41,7 @@ func TestAddBST(t *testing.T) {
 
 	for _, key := range keys {
 		if err := tree.Add(key, domain.RecordData{}); err != nil {
-			t.Fatalf("Add() error = %v", err)
+			t.Fatalf("Index() error = %v", err)
 		}
 	}
 
