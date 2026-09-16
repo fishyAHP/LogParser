@@ -193,6 +193,10 @@ func (t *rbTree) rightRotate(n *node) {
 	n.right = parent
 }
 
+// Find return []domain.RecordData
+// because if it will return domain.RecordData it changes
+// from O(log n) to O(n). Also this func return bool which mean
+// if true, it founded key, another not yet.
 func (t *rbTree) Find(key time.Time) ([]domain.RecordData, bool) {
 	cur := t.root
 
