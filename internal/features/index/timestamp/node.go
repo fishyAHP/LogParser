@@ -38,9 +38,10 @@ func (n *node) add(value domain.RecordData) {
 
 func (n *node) uncle() *node {
 	parent := n.parent
+	grandparent := parent.parent
 
-	if parent.left == n {
-		return parent.right
+	if grandparent.left == parent {
+		return grandparent.right
 	}
-	return parent.left
+	return grandparent.left
 }
