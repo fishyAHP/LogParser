@@ -2,6 +2,7 @@ package timestamp
 
 import (
 	"errors"
+	"math"
 	"time"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
@@ -214,4 +215,41 @@ func (t *rbTree) Find(key time.Time) ([]domain.RecordData, bool) {
 	}
 
 	return nil, false
+}
+
+func (t *rbTree) Range(from, to time.Time) ([]domain.RecordData, bool) {
+	cur := t.root
+	ans := make([]domain.RecordData, 0, int(math.Log2(float64(t.count)+1)))
+
+findLoop:
+	for cur != nil {
+		cmp := compare(from, cur.key)
+
+		switch cmp {
+		case 1:
+			cur = cur.right
+		case -1:
+			if cur == cur.parent.left {
+				break findLoop
+			}
+			cur = cur.left
+		default:
+			ans = append(ans, cur.records...)
+			break findLoop
+		}
+	}
+
+	cur = cur.parent
+	for {
+		localCur := cur
+
+		for localCur != nil {
+			if compare(from, localCur.key) == -1 &&
+				compare(localCur.key, to) == -1 {
+
+			}
+		}
+	}
+
+	return ans, true
 }
