@@ -261,3 +261,17 @@ func (t *rbTree) rangeSearch(n *node, from, to time.Time, res []domain.RecordDat
 
 	return res
 }
+
+func (t *rbTree) Len() int {
+	return t.elemsCount
+}
+
+func (t *rbTree) Height() int {
+	return t.nodesCount
+}
+
+func (t *rbTree) Clear() {
+	t.root = nil
+	t.elemsCount = 0
+	t.nodesCount = 0
+}

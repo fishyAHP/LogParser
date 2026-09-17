@@ -39,3 +39,9 @@ func (i *Index[K]) Get(comp K) []domain.RecordData {
 
 	return slices.Clone(i.index[comp])
 }
+func (i *Index[K]) Clear() {
+	i.mtx.Lock()
+	defer i.mtx.Unlock()
+
+	i.index = make(map[K][]domain.RecordData)
+}

@@ -1,6 +1,8 @@
 package index
 
 import (
+	"strings"
+
 	"fishyAHP/LogParser.git/internal/core/domain"
 	"fishyAHP/LogParser.git/internal/features/index/timestamp"
 )
@@ -22,9 +24,17 @@ func New() *Indexer {
 }
 
 func (i *Indexer) Index(record domain.RecordData, entry domain.LogEntry) {
-	i.level.Add(entry.Level, record)
-	i.component.Add(entry.Component, record)
-	i.pid.Add(entry.PID, record)
+	if strings.TrimSpace(string(entry.Level)) != "" {
+		i.level.Add(entry.Level, record)
+	}
+
+	if strings.TrimSpace(entry.Component) != "" {
+		i.component.Add(entry.Component, record)
+	}
+
+	if entry.PID != 0 {
+		i.pid.Add(entry.PID, record)
+	}
 
 	if err := i.timestamp.Add(entry.Timestamp, record); err != nil {
 		// залогируем
