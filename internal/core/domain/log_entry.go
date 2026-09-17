@@ -8,8 +8,22 @@ type LogEntry struct {
 	Level     LogLevel
 	Component LogComponent
 	PID       PID
+	IP        IP
 	Message   string
 	Other     map[string]string
+}
+
+type IP [4]uint8
+
+func (i IP) IsZero() bool {
+	var zeroCount int
+	for _, ip := range i {
+		if ip == 0 {
+			zeroCount++
+		}
+	}
+
+	return zeroCount == 4
 }
 
 type PID = uint32

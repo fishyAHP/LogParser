@@ -11,9 +11,9 @@ type Index struct {
 	tree *rbTree
 }
 
-func New() *Index {
+func New(accuracy time.Duration) *Index {
 	return &Index{
-		tree: newRBTree(),
+		tree: newRBTree(accuracy),
 	}
 }
 
@@ -22,4 +22,8 @@ func (i *Index) Add(key time.Time, value domain.RecordData) error {
 		return fmt.Errorf("time index add: %w", err)
 	}
 	return nil
+}
+
+func (i *Index) Clear() {
+	i.tree.Clear()
 }

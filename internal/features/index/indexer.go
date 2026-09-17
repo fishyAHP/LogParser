@@ -2,6 +2,7 @@ package index
 
 import (
 	"strings"
+	"time"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
 	"fishyAHP/LogParser.git/internal/features/index/timestamp"
@@ -11,15 +12,17 @@ type Indexer struct {
 	level     *Index[domain.LogLevel]
 	component *Index[domain.LogComponent]
 	pid       *Index[domain.PID]
+	ip        *Index[domain.IP]
 	timestamp *timestamp.Index
 }
 
-func New() *Indexer {
+func New(timeAccuracy time.Duration) *Indexer {
 	return &Indexer{
 		level:     NewIndex[domain.LogLevel](),
 		component: NewIndex[domain.LogComponent](),
 		pid:       NewIndex[domain.PID](),
-		timestamp: timestamp.New(),
+		ip:        NewIndex[domain.IP](),
+		timestamp: timestamp.New(timeAccuracy),
 	}
 }
 
@@ -36,7 +39,19 @@ func (i *Indexer) Index(record domain.RecordData, entry domain.LogEntry) {
 		i.pid.Add(entry.PID, record)
 	}
 
+	if !entry.IP.IsZero() {
+		i.ip.Add(entry.IP, record)
+	}
+
 	if err := i.timestamp.Add(entry.Timestamp, record); err != nil {
 		// залогируем
 	}
+}
+
+func (i *Indexer) Clear() {
+	i.level.Clear()
+	i.component.Clear()
+	i.pid.Clear()
+	i.ip.Clear()
+	i.timestamp.Clear()
 }
