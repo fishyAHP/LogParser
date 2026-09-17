@@ -12,7 +12,9 @@ type Index struct {
 }
 
 func New() *Index {
-	return &Index{}
+	return &Index{
+		tree: newRBTree(),
+	}
 }
 
 func (i *Index) Add(key time.Time, value domain.RecordData) error {
