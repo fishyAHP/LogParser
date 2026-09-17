@@ -2,7 +2,6 @@ package timestamp
 
 import (
 	"errors"
-	"math"
 	"time"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
@@ -218,38 +217,37 @@ func (t *rbTree) Find(key time.Time) ([]domain.RecordData, bool) {
 }
 
 func (t *rbTree) Range(from, to time.Time) ([]domain.RecordData, bool) {
-	cur := t.root
-	ans := make([]domain.RecordData, 0, int(math.Log2(float64(t.count)+1)))
-
-findLoop:
-	for cur != nil {
-		cmp := compare(from, cur.key)
-
-		switch cmp {
-		case 1:
-			cur = cur.right
-		case -1:
-			if cur == cur.parent.left {
-				break findLoop
-			}
-			cur = cur.left
-		default:
-			ans = append(ans, cur.records...)
-			break findLoop
-		}
+	if compare(from, to) == 1 {
+		return nil, false
 	}
 
-	cur = cur.parent
-	for {
-		localCur := cur
+	result := make([]domain.RecordData, 0)
 
-		for localCur != nil {
-			if compare(from, localCur.key) == -1 &&
-				compare(localCur.key, to) == -1 {
+	result = rangeSearch(t.root, from, to, result)
 
-			}
-		}
+	if len(result) == 0 {
+		return nil, false
+	}
+	return result, true
+}
+
+func rangeSearch(n *node, from, to time.Time, res []domain.RecordData) []domain.RecordData {
+	if n == nil {
+		return res
 	}
 
-	return ans, true
+	if compare(n.key, from) == 1 {
+		res = rangeSearch(n.left, from, to, res)
+	}
+
+	if compare(n.key, from) > -1 &&
+		compare(n.key, to) < 1 {
+		res = append(res, n.records...)
+	}
+
+	if compare(n.key, to) == -1 {
+		res = rangeSearch(n.right, from, to, res)
+	}
+
+	return res
 }
