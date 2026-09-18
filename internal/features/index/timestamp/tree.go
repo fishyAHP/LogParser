@@ -241,7 +241,11 @@ func (t *rbTree) Range(from, to time.Time) ([]domain.RecordData, bool) {
 	return result, true
 }
 
-func (t *rbTree) rangeSearch(n *node, from, to time.Time, res []domain.RecordData) []domain.RecordData {
+func (t *rbTree) rangeSearch(
+	n *node,
+	from, to time.Time,
+	res []domain.RecordData,
+) []domain.RecordData {
 	if n == nil {
 		return res
 	}
