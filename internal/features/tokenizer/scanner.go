@@ -8,14 +8,27 @@ type Scanner struct {
 	curPosition  int
 }
 
-func (s *Scanner) peek() rune {
-	return s.input[s.curPosition]
+func NewScanner(input string) Scanner {
+	return Scanner{
+		input:        []rune(input),
+		lastPosition: -1,
+	}
+}
+
+func (s *Scanner) peek() (rune, bool) {
+	if s.curPosition >= 0 &&
+		s.curPosition < len(s.input) {
+		return s.input[s.curPosition], true
+
+	}
+
+	return 0, false
 }
 
 var EOF = errors.New("end of file")
 
 func (s *Scanner) advance() error {
-	if s.curPosition+1 >= len(s.input) {
+	if s.curPosition >= len(s.input) {
 		return EOF
 	}
 
@@ -24,7 +37,8 @@ func (s *Scanner) advance() error {
 }
 
 func (s *Scanner) getValue() string {
-	return string(s.input[s.lastPosition:s.curPosition])
-}
+	value := string(s.input[s.lastPosition+1 : s.curPosition])
+	s.lastPosition = s.curPosition
 
-// msgtime
+	return value
+}
