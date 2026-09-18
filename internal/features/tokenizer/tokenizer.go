@@ -1,15 +1,27 @@
 package tokenizer
 
+import "strings"
+
 type Tokenizer struct {
 	separator rune
 }
 
+func NewTokenizer(sep rune) Tokenizer {
+	return Tokenizer{
+		sep,
+	}
+}
+
 func (t *Tokenizer) Tokenize(raw string) []Token {
-	scanner := Scanner{input: []rune(raw)}
+	if strings.TrimSpace(raw) == "" {
+		return []Token{newToken("", TokenEOF)}
+	}
+
+	scanner := NewScanner(raw)
 	result := make([]Token, 0, 6)
 
-	for scanner.advance() == nil {
-		if scanner.peek() == t.separator {
+	for {
+		if r, ok := scanner.peek(); ok && r == t.separator {
 			s := scanner.getValue()
 			result = append(result, newToken(
 				s,
@@ -20,12 +32,21 @@ func (t *Tokenizer) Tokenize(raw string) []Token {
 				TokenSeparator,
 			))
 		}
+
+		if scanner.advance() != nil {
+			s := scanner.getValue()
+			result = append(result, newToken(
+				s,
+				TokenString,
+			))
+
+			break
+		}
 	}
 
 	result = append(result, newToken(
-		"\n",
+		"",
 		TokenEOF,
 	))
-
 	return result
 }
