@@ -8,22 +8,26 @@ import (
 )
 
 type rbTree struct {
-	root  *node
-	count int
+	root       *node
+	accuracy   time.Duration
+	elemsCount int
+	nodesCount int
 }
 
-func newRBTree() *rbTree {
-	return &rbTree{}
+func newRBTree(accuracy time.Duration) *rbTree {
+	return &rbTree{
+		accuracy: accuracy,
+	}
 }
 
-// compare returns
+// t.compare returns
 // -1 if k1 less than k2
 // 0 if k1 equal to k2
 // 1 if k1 more than k2
 // it need to find place for insert in rb-tree
-func compare(k1, k2 time.Time) int {
-	k1 = k1.Truncate(time.Minute)
-	k2 = k2.Truncate(time.Minute)
+func (t *rbTree) compare(k1, k2 time.Time) int {
+	k1 = k1.Truncate(t.accuracy)
+	k2 = k2.Truncate(t.accuracy)
 
 	switch {
 	case k1.Before(k2):
@@ -40,29 +44,33 @@ func (t *rbTree) Add(key time.Time, value domain.RecordData) (err error) {
 		return errors.New("key in future")
 	}
 
-	if t.count < 1 {
+	if t.elemsCount < 1 {
 		t.root = newNode(key, value)
+		t.nodesCount++
+
 		t.root.color = Black
-		t.count = 1
+		t.elemsCount = 1
 		return nil
 	}
 
 	current := t.root
 	defer func() {
 		if err == nil {
-			t.count++
+			t.elemsCount++
 		}
 	}()
 
 	for {
-		cmpr := compare(key, current.key)
+		cmp := t.compare(key, current.key)
 
-		switch cmpr {
+		switch cmp {
 		case -1:
 			if current.left != nil {
 				current = current.left
 			} else {
 				nod := newNode(key, value)
+				t.nodesCount++
+
 				nod.parent = current
 				current.left = nod
 				t.fixInsert(nod)
@@ -73,6 +81,8 @@ func (t *rbTree) Add(key time.Time, value domain.RecordData) (err error) {
 				current = current.right
 			} else {
 				nod := newNode(key, value)
+				t.nodesCount++
+
 				nod.parent = current
 				current.right = nod
 				t.fixInsert(nod)
@@ -191,4 +201,81 @@ func (t *rbTree) rightRotate(n *node) {
 
 	n.parent = grandparent
 	n.right = parent
+}
+
+// Find return []domain.RecordData
+// because if it will return domain.RecordData it changes
+// from O(log n) to O(n). Also this func return bool which mean
+// if true, it founded key, another not yet.
+func (t *rbTree) Find(key time.Time) ([]domain.RecordData, bool) {
+	cur := t.root
+
+	for cur != nil {
+		cmp := t.compare(key, cur.key)
+
+		switch cmp {
+		case 1:
+			cur = cur.right
+		case -1:
+			cur = cur.left
+		default:
+			return cur.records, true
+		}
+	}
+
+	return nil, false
+}
+
+func (t *rbTree) Range(from, to time.Time) ([]domain.RecordData, bool) {
+	if t.compare(from, to) == 1 {
+		return nil, false
+	}
+
+	result := make([]domain.RecordData, 0)
+
+	result = t.rangeSearch(t.root, from, to, result)
+
+	if len(result) == 0 {
+		return nil, false
+	}
+	return result, true
+}
+
+func (t *rbTree) rangeSearch(
+	n *node,
+	from, to time.Time,
+	res []domain.RecordData,
+) []domain.RecordData {
+	if n == nil {
+		return res
+	}
+
+	if t.compare(n.key, from) == 1 {
+		res = t.rangeSearch(n.left, from, to, res)
+	}
+
+	if t.compare(n.key, from) > -1 &&
+		t.compare(n.key, to) < 1 {
+		res = append(res, n.records...)
+	}
+
+	if t.compare(n.key, to) == -1 {
+		res = t.rangeSearch(n.right, from, to, res)
+	}
+
+	return res
+}
+
+func (t *rbTree) Len() int {
+	return t.elemsCount
+}
+
+func (t *rbTree) Height() int {
+	return t.nodesCount
+}
+
+func (t *rbTree) Clear() {
+	t.root = nil
+	t.elemsCount = 0
+	t.nodesCount = 0
 }

@@ -14,7 +14,7 @@ func TestAddFirstNode(t *testing.T) {
 	value := domain.RecordData{}
 
 	if err := tree.Add(key, value); err != nil {
-		t.Fatalf("Add() error = %v", err)
+		t.Fatalf("Index() error = %v", err)
 	}
 
 	if tree.root == nil {
@@ -25,8 +25,8 @@ func TestAddFirstNode(t *testing.T) {
 		t.Fatalf("root color = %v, want Black", tree.root.color)
 	}
 
-	if tree.count != 1 {
-		t.Fatalf("count = %d, want 1", tree.count)
+	if tree.elemsCount != 1 {
+		t.Fatalf("elemsCount = %d, want 1", tree.elemsCount)
 	}
 }
 
@@ -41,7 +41,7 @@ func TestAddBST(t *testing.T) {
 
 	for _, key := range keys {
 		if err := tree.Add(key, domain.RecordData{}); err != nil {
-			t.Fatalf("Add() error = %v", err)
+			t.Fatalf("Index() error = %v", err)
 		}
 	}
 
@@ -66,8 +66,8 @@ func TestAddDuplicateKey(t *testing.T) {
 		}
 	}
 
-	if tree.count != 3 {
-		t.Fatalf("count = %d, want 3", tree.count)
+	if tree.elemsCount != 3 {
+		t.Fatalf("elemsCount = %d, want 3", tree.elemsCount)
 	}
 
 	if len(tree.root.records) != 3 {
@@ -270,8 +270,8 @@ func assertRBTreeValid(t *testing.T, tree *rbTree) {
 	t.Helper()
 
 	if tree.root == nil {
-		if tree.count != 0 {
-			t.Fatalf("tree is empty, but count = %d", tree.count)
+		if tree.elemsCount != 0 {
+			t.Fatalf("tree is empty, but elemsCount = %d", tree.elemsCount)
 		}
 
 		return

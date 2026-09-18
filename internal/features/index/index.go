@@ -12,7 +12,7 @@ type Index[K comparable] struct {
 	mtx   sync.RWMutex
 }
 
-func New[K comparable]() *Index[K] {
+func NewIndex[K comparable]() *Index[K] {
 	return &Index[K]{
 		index: make(map[K][]domain.RecordData),
 		mtx:   sync.RWMutex{},
@@ -38,4 +38,10 @@ func (i *Index[K]) Get(comp K) []domain.RecordData {
 	defer i.mtx.RUnlock()
 
 	return slices.Clone(i.index[comp])
+}
+func (i *Index[K]) Clear() {
+	i.mtx.Lock()
+	defer i.mtx.Unlock()
+
+	i.index = make(map[K][]domain.RecordData)
 }
