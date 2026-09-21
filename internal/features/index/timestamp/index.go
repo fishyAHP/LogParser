@@ -18,7 +18,7 @@ func New(accuracy time.Duration) *Index {
 }
 
 func (i *Index) Add(key time.Time, value domain.RecordData) error {
-	if err := i.tree.Add(key, value); err != nil {
+	if err := i.tree.Insert(key, value); err != nil {
 		return fmt.Errorf("time index add: %w", err)
 	}
 	return nil

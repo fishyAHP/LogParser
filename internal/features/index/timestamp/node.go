@@ -1,10 +1,10 @@
 package timestamp
 
 import (
-	"slices"
 	"time"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
+	"fishyAHP/LogParser.git/internal/features/index/set"
 )
 
 type color uint
@@ -16,7 +16,7 @@ const (
 
 type node struct {
 	key     time.Time
-	records []domain.RecordData
+	records *set.Set
 
 	left, right *node
 	parent      *node
@@ -25,15 +25,18 @@ type node struct {
 }
 
 func newNode(key time.Time, value domain.RecordData) *node {
+	s := set.NewSet(0)
+	s.Add(value)
+
 	return &node{
 		key:     key,
-		records: []domain.RecordData{value},
+		records: s,
 		color:   Red,
 	}
 }
 
 func (n *node) add(value domain.RecordData) {
-	n.records = slices.Clone(append(n.records, value))
+	n.records.Add(value)
 }
 
 func (n *node) uncle() *node {

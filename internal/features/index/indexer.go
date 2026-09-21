@@ -5,23 +5,24 @@ import (
 	"time"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
+	"fishyAHP/LogParser.git/internal/features/index/hash_index"
 	"fishyAHP/LogParser.git/internal/features/index/timestamp"
 )
 
 type Indexer struct {
-	level     *Index[domain.LogLevel]
-	component *Index[domain.LogComponent]
-	pid       *Index[domain.PID]
-	ip        *Index[domain.IP]
+	level     Index[domain.LogLevel]
+	component Index[domain.LogComponent]
+	pid       Index[domain.PID]
+	ip        Index[domain.IP]
 	timestamp *timestamp.Index
 }
 
 func New(timeAccuracy time.Duration) *Indexer {
 	return &Indexer{
-		level:     NewIndex[domain.LogLevel](),
-		component: NewIndex[domain.LogComponent](),
-		pid:       NewIndex[domain.PID](),
-		ip:        NewIndex[domain.IP](),
+		level:     hash_index.NewIndex[domain.LogLevel](),
+		component: hash_index.NewIndex[domain.LogComponent](),
+		pid:       hash_index.NewIndex[domain.PID](),
+		ip:        hash_index.NewIndex[domain.IP](),
 		timestamp: timestamp.New(timeAccuracy),
 	}
 }

@@ -39,7 +39,7 @@ func (t *rbTree) compare(k1, k2 time.Time) int {
 	}
 }
 
-func (t *rbTree) Add(key time.Time, value domain.RecordData) (err error) {
+func (t *rbTree) Insert(key time.Time, value domain.RecordData) (err error) {
 	if time.Since(key) < 0 {
 		return errors.New("key in future")
 	}
@@ -219,7 +219,7 @@ func (t *rbTree) Find(key time.Time) ([]domain.RecordData, bool) {
 		case -1:
 			cur = cur.left
 		default:
-			return cur.records, true
+			return cur.records.Slice(), true
 		}
 	}
 
@@ -256,7 +256,7 @@ func (t *rbTree) rangeSearch(
 
 	if t.compare(n.key, from) > -1 &&
 		t.compare(n.key, to) < 1 {
-		res = append(res, n.records...)
+		res = append(res, n.records.Slice()...)
 	}
 
 	if t.compare(n.key, to) == -1 {
