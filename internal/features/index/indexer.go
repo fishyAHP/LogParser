@@ -14,7 +14,7 @@ type Indexer struct {
 	component Index[domain.LogComponent]
 	pid       Index[domain.PID]
 	ip        Index[domain.IP]
-	timestamp *timestamp.Index
+	timestamp TimeIndex
 }
 
 func New(timeAccuracy time.Duration) *Indexer {
