@@ -43,7 +43,7 @@ func (i *Index[K]) Add(key K, value domain.RecordData) {
 	i.count++
 }
 
-func (i *Index[K]) Contains(key K) ([]domain.RecordData, bool) {
+func (i *Index[K]) Get(key K) ([]domain.RecordData, bool) {
 	i.mtx.RLock()
 	defer i.mtx.RUnlock()
 

@@ -1,7 +1,6 @@
 package timestamp
 
 import (
-	"fmt"
 	"time"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
@@ -11,7 +10,7 @@ type Index struct {
 	tree *rbTree
 }
 
-func (i *Index) Find(key time.Time) ([]domain.RecordData, bool) {
+func (i *Index) Get(key time.Time) ([]domain.RecordData, bool) {
 	return i.tree.Find(key)
 }
 
@@ -53,11 +52,10 @@ func New(accuracy time.Duration) *Index {
 	}
 }
 
-func (i *Index) Add(key time.Time, value domain.RecordData) error {
+func (i *Index) Add(key time.Time, value domain.RecordData) {
 	if err := i.tree.Insert(key, value); err != nil {
-		return fmt.Errorf("time index add: %w", err)
+		// залогируем fmt.Errorf("time index add: %w", err))
 	}
-	return nil
 }
 
 func (i *Index) Clear() {
