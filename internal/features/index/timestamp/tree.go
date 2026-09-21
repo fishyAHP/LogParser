@@ -203,9 +203,9 @@ func (t *rbTree) rightRotate(n *node) {
 	n.right = parent
 }
 
-// Find return []domain.RecordData
-// because if it will return domain.RecordData it changes
-// from O(log n) to O(n). Also this func return bool which mean
+// Find return []domain.RecordData,
+// because if it will return domain.RecordData, it changes
+// from O(log n) to O(n). Also this func return bool which means
 // if true, it founded key, another not yet.
 func (t *rbTree) Find(key time.Time) ([]domain.RecordData, bool) {
 	cur := t.root
@@ -274,8 +274,32 @@ func (t *rbTree) Height() int {
 	return t.nodesCount
 }
 
+func (t *rbTree) Min() *node {
+	cur := t.root
+
+	for cur.left != nil {
+		cur = cur.left
+	}
+
+	return cur
+}
+
+func (t *rbTree) Max() *node {
+	cur := t.root
+
+	for cur.right != nil {
+		cur = cur.right
+	}
+
+	return cur
+}
+
 func (t *rbTree) Clear() {
 	t.root = nil
 	t.elemsCount = 0
 	t.nodesCount = 0
+}
+
+func (t *rbTree) Remove(key time.Time) bool {
+	return false
 }

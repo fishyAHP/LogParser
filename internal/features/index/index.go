@@ -16,13 +16,13 @@ type Index[K comparable] interface {
 
 type TimeIndex interface {
 	Add(time.Time, domain.RecordData) error
-	Find(time.Time)
-	Range(time.Time, time.Time)
-	Remove(time.Time)
+	Find(time.Time) ([]domain.RecordData, bool)
+	Range(time.Time, time.Time) ([]domain.RecordData, bool)
+	Remove(time.Time) bool
 
 	Min() []domain.RecordData
 	Max() []domain.RecordData
 
-	Len()
+	Len() int
 	Clear()
 }
