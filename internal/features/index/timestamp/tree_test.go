@@ -13,7 +13,7 @@ func TestAddFirstNode(t *testing.T) {
 	key := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	value := domain.RecordData{}
 
-	if err := tree.Add(key, value); err != nil {
+	if err := tree.Insert(key, value); err != nil {
 		t.Fatalf("Index() error = %v", err)
 	}
 
@@ -40,7 +40,7 @@ func TestAddBST(t *testing.T) {
 	}
 
 	for _, key := range keys {
-		if err := tree.Add(key, domain.RecordData{}); err != nil {
+		if err := tree.Insert(key, domain.RecordData{}); err != nil {
 			t.Fatalf("Index() error = %v", err)
 		}
 	}
@@ -61,7 +61,7 @@ func TestAddDuplicateKey(t *testing.T) {
 	}
 
 	for _, key := range keys {
-		if err := tree.Add(key, domain.RecordData{}); err != nil {
+		if err := tree.Insert(key, domain.RecordData{}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -85,11 +85,11 @@ func TestDifferentSecondsSameMinute(t *testing.T) {
 	key1 := time.Date(2026, 1, 1, 12, 30, 1, 0, time.UTC)
 	key2 := time.Date(2026, 1, 1, 12, 30, 59, 0, time.UTC)
 
-	if err := tree.Add(key1, domain.RecordData{}); err != nil {
+	if err := tree.Insert(key1, domain.RecordData{}); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := tree.Add(key2, domain.RecordData{}); err != nil {
+	if err := tree.Insert(key2, domain.RecordData{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -116,7 +116,7 @@ func TestFixInsertLL(t *testing.T) {
 	}
 
 	for _, key := range keys {
-		if err := tree.Add(key, domain.RecordData{}); err != nil {
+		if err := tree.Insert(key, domain.RecordData{}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -138,7 +138,7 @@ func TestFixInsertRR(t *testing.T) {
 	}
 
 	for _, key := range keys {
-		if err := tree.Add(key, domain.RecordData{}); err != nil {
+		if err := tree.Insert(key, domain.RecordData{}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -160,7 +160,7 @@ func TestFixInsertLR(t *testing.T) {
 	}
 
 	for _, key := range keys {
-		if err := tree.Add(key, domain.RecordData{}); err != nil {
+		if err := tree.Insert(key, domain.RecordData{}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -182,7 +182,7 @@ func TestFixInsertRL(t *testing.T) {
 	}
 
 	for _, key := range keys {
-		if err := tree.Add(key, domain.RecordData{}); err != nil {
+		if err := tree.Insert(key, domain.RecordData{}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -256,7 +256,7 @@ func TestRandomInsertions(t *testing.T) {
 	for i := range 1000 {
 		key := start.Add(time.Duration(i) * time.Minute)
 
-		if err := tree.Add(key, domain.RecordData{}); err != nil {
+		if err := tree.Insert(key, domain.RecordData{}); err != nil {
 			t.Fatal(err)
 		}
 

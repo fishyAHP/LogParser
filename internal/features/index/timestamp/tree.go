@@ -2,9 +2,11 @@ package timestamp
 
 import (
 	"errors"
+	"math"
 	"time"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
+	"fishyAHP/LogParser.git/internal/features/index/set"
 )
 
 type rbTree struct {
@@ -39,7 +41,7 @@ func (t *rbTree) compare(k1, k2 time.Time) int {
 	}
 }
 
-func (t *rbTree) Add(key time.Time, value domain.RecordData) (err error) {
+func (t *rbTree) Insert(key time.Time, value domain.RecordData) (err error) {
 	if time.Since(key) < 0 {
 		return errors.New("key in future")
 	}
@@ -89,7 +91,9 @@ func (t *rbTree) Add(key time.Time, value domain.RecordData) (err error) {
 				return
 			}
 		default:
-			current.add(value)
+			if ok := current.add(value); !ok {
+				return errors.New("key already exist")
+			}
 			return
 		}
 	}
@@ -203,11 +207,11 @@ func (t *rbTree) rightRotate(n *node) {
 	n.right = parent
 }
 
-// Find return []domain.RecordData
-// because if it will return domain.RecordData it changes
-// from O(log n) to O(n). Also this func return bool which mean
+// Find return []domain.RecordData,
+// because if it will return domain.RecordData, it changes
+// from O(log n) to O(n). Also this func return bool which means
 // if true, it founded key, another not yet.
-func (t *rbTree) Find(key time.Time) ([]domain.RecordData, bool) {
+func (t *rbTree) Find(key time.Time) (*set.Set[domain.RecordData], bool) {
 	cur := t.root
 
 	for cur != nil {
@@ -256,7 +260,7 @@ func (t *rbTree) rangeSearch(
 
 	if t.compare(n.key, from) > -1 &&
 		t.compare(n.key, to) < 1 {
-		res = append(res, n.records...)
+		res = append(res, n.records.Slice()...)
 	}
 
 	if t.compare(n.key, to) == -1 {
@@ -271,11 +275,43 @@ func (t *rbTree) Len() int {
 }
 
 func (t *rbTree) Height() int {
-	return t.nodesCount
+	return int(
+		2 * math.Log2(
+			float64(t.nodesCount+1),
+		),
+	)
+}
+
+func (t *rbTree) Min() *node {
+	cur := t.root
+
+	for cur.left != nil {
+		cur = cur.left
+	}
+
+	return cur
+}
+
+func (t *rbTree) Max() *node {
+	cur := t.root
+
+	for cur.right != nil {
+		cur = cur.right
+	}
+
+	return cur
 }
 
 func (t *rbTree) Clear() {
 	t.root = nil
 	t.elemsCount = 0
 	t.nodesCount = 0
+}
+
+func (t *rbTree) Remove(key time.Time) bool {
+	return false
+}
+
+func (t *rbTree) Delete(key time.Time, value domain.RecordData) bool {
+	return false
 }

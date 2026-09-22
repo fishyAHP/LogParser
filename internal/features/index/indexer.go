@@ -5,25 +5,35 @@ import (
 	"time"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
+	"fishyAHP/LogParser.git/internal/features/index/hash_index"
+	"fishyAHP/LogParser.git/internal/features/index/text"
+	"fishyAHP/LogParser.git/internal/features/index/text/words"
 	"fishyAHP/LogParser.git/internal/features/index/timestamp"
 )
 
 type Indexer struct {
-	level     *Index[domain.LogLevel]
-	component *Index[domain.LogComponent]
-	pid       *Index[domain.PID]
-	ip        *Index[domain.IP]
-	timestamp *timestamp.Index
+	level     Index[domain.LogLevel]
+	component Index[domain.LogComponent]
+	pid       Index[domain.PID]
+	ip        Index[domain.IP]
+	timestamp TimeIndex
+	text      TextIndex
 }
 
 func New(timeAccuracy time.Duration) *Indexer {
 	return &Indexer{
-		level:     NewIndex[domain.LogLevel](),
-		component: NewIndex[domain.LogComponent](),
-		pid:       NewIndex[domain.PID](),
-		ip:        NewIndex[domain.IP](),
+		level:     hash_index.New[domain.LogLevel](),
+		component: hash_index.New[domain.LogComponent](),
+		pid:       hash_index.New[domain.PID](),
+		ip:        hash_index.New[domain.IP](),
 		timestamp: timestamp.New(timeAccuracy),
+		text:      text.New(),
 	}
+}
+
+func (i *Indexer) SetTokenizer(tokenizer *words.Tokenizer) {
+	t := (i.text).(*text.Index)
+	t.Tokenizer = tokenizer
 }
 
 func (i *Indexer) Index(record domain.RecordData, entry domain.LogEntry) {
@@ -43,9 +53,7 @@ func (i *Indexer) Index(record domain.RecordData, entry domain.LogEntry) {
 		i.ip.Add(entry.IP, record)
 	}
 
-	if err := i.timestamp.Add(entry.Timestamp, record); err != nil {
-		// залогируем
-	}
+	i.timestamp.Add(entry.Timestamp, record)
 }
 
 func (i *Indexer) Clear() {

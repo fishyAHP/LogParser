@@ -1,47 +1,34 @@
 package index
 
 import (
-	"slices"
-	"sync"
+	"time"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
+	"fishyAHP/LogParser.git/internal/features/index/set"
 )
 
-type Index[K comparable] struct {
-	index map[K][]domain.RecordData
-	mtx   sync.RWMutex
+type Index[K comparable] interface {
+	Add(K, domain.RecordData)
+	Get(K) (*set.Set[domain.RecordData], bool)
+	Remove(K) bool
+	Delete(K, domain.RecordData) bool
+	Len() int
+	Clear()
 }
 
-func NewIndex[K comparable]() *Index[K] {
-	return &Index[K]{
-		index: make(map[K][]domain.RecordData),
-		mtx:   sync.RWMutex{},
-	}
+type TimeIndex interface {
+	Index[time.Time]
+
+	Range(time.Time, time.Time) ([]domain.RecordData, bool)
+	Min() *set.Set[domain.RecordData]
+	Max() *set.Set[domain.RecordData]
 }
 
-func (i *Index[K]) Len() int {
-	i.mtx.RLock()
-	defer i.mtx.RUnlock()
-
-	return len(i.index)
-}
-
-func (i *Index[K]) Add(comp K, data domain.RecordData) {
-	i.mtx.Lock()
-	defer i.mtx.Unlock()
-
-	i.index[comp] = append(i.index[comp], data)
-}
-
-func (i *Index[K]) Get(comp K) []domain.RecordData {
-	i.mtx.RLock()
-	defer i.mtx.RUnlock()
-
-	return slices.Clone(i.index[comp])
-}
-func (i *Index[K]) Clear() {
-	i.mtx.Lock()
-	defer i.mtx.Unlock()
-
-	i.index = make(map[K][]domain.RecordData)
+type TextIndex interface {
+	Add(string, domain.RecordData)
+	Get(string) *set.Set[domain.RecordData]
+	RemoveTokens(string) bool
+	RemoveRecord(string, domain.RecordData) bool
+	Len() int
+	Clear()
 }
