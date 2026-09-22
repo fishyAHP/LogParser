@@ -1,11 +1,11 @@
 package set
 
 func Intersection[K comparable](s1, s2 *Set[K]) *Set[K] {
-	small := minSet[K](s1, s2)
-	other := otherSet[K](small, s1, s2)
-	res := New[K](small.Len())
+	smaller := minSet[K](s1, s2)
+	other := otherSet[K](smaller, s1, s2)
+	res := New[K](smaller.Len())
 
-	for k := range small.set {
+	for k := range smaller.set {
 		if other.Contains(k) {
 			res.Add(k)
 		}

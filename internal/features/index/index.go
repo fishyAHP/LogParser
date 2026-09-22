@@ -9,7 +9,7 @@ import (
 
 type Index[K comparable] interface {
 	Add(K, domain.RecordData)
-	Get(K) (*set.Set, bool)
+	Get(K) (*set.Set[domain.RecordData], bool)
 	Remove(K) bool
 	Delete(K, domain.RecordData) bool
 	Len() int
@@ -20,6 +20,6 @@ type TimeIndex interface {
 	Index[time.Time]
 
 	Range(time.Time, time.Time) ([]domain.RecordData, bool)
-	Min() *set.Set
-	Max() *set.Set
+	Min() *set.Set[domain.RecordData]
+	Max() *set.Set[domain.RecordData]
 }

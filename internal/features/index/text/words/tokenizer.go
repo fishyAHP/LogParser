@@ -1,4 +1,4 @@
-package tokens
+package words
 
 import (
 	"strings"
@@ -35,7 +35,7 @@ func New(minToken uint8, ignoringWords ...Token) *Tokenizer {
 	}
 }
 
-func (t *Tokenizer) Parse(input string) []Token {
+func (t *Tokenizer) Tokenize(input string) []Token {
 	if strings.TrimSpace(input) == "" {
 		return nil
 	}
