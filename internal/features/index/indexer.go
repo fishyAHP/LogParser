@@ -1,7 +1,6 @@
 package index
 
 import (
-	"errors"
 	"strings"
 	"time"
 
@@ -67,40 +66,40 @@ func (i *IndexService) Clear() {
 	i.timestamp.Clear()
 }
 
-func (i *IndexService) ByLevel(level domain.LogLevel) (*set.Set[domain.RecordData], error) {
+func (i *IndexService) ByLevel(level domain.LogLevel) *set.Set[domain.RecordData] {
 	sett, ok := i.level.Get(level)
 	if !ok {
-		return nil, errors.New("no find level")
+		return nil
 	}
 
-	return sett, nil
+	return sett
 }
 
-func (i *IndexService) ByComponent(component domain.LogComponent) (*set.Set[domain.RecordData], error) {
+func (i *IndexService) ByComponent(component domain.LogComponent) *set.Set[domain.RecordData] {
 	sett, ok := i.component.Get(component)
 	if !ok {
-		return nil, errors.New("no find component")
+		return nil
 	}
 
-	return sett, nil
+	return sett
 }
 
-func (i *IndexService) ByIP(ip domain.IP) (*set.Set[domain.RecordData], error) {
+func (i *IndexService) ByIP(ip domain.IP) *set.Set[domain.RecordData] {
 	sett, ok := i.ip.Get(ip)
 	if !ok {
-		return nil, errors.New("no find ip")
+		return nil
 	}
 
-	return sett, nil
+	return sett
 }
 
-func (i *IndexService) ByTimestampRange(from, to time.Time) (*set.Set[domain.RecordData], error) {
+func (i *IndexService) ByTimestampRange(from, to time.Time) *set.Set[domain.RecordData] {
 	sett, ok := i.timestamp.Range(from, to)
 	if !ok {
-		return nil, errors.New("no find component")
+		return nil
 	}
 
-	return sett, nil
+	return sett
 }
 
 func (i *IndexService) ByText(text string) *set.Set[domain.RecordData] {
