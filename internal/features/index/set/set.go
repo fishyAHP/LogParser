@@ -1,18 +1,16 @@
 package set
 
-import "fishyAHP/LogParser.git/internal/core/domain"
-
-type Set struct {
-	set map[domain.RecordData]struct{}
+type Set[K comparable] struct {
+	set map[K]struct{}
 }
 
-func NewSet(length int) *Set {
-	return &Set{
-		make(map[domain.RecordData]struct{}, length),
+func New[K comparable](length int) *Set[K] {
+	return &Set[K]{
+		make(map[K]struct{}, length),
 	}
 }
 
-func (s *Set) Add(record domain.RecordData) bool {
+func (s *Set[K]) Add(record K) bool {
 	if _, ok := s.set[record]; !ok {
 		s.set[record] = struct{}{}
 		return true
@@ -21,9 +19,15 @@ func (s *Set) Add(record domain.RecordData) bool {
 	return false
 }
 
+func (s *Set[K]) AddMany(records ...K) {
+	for _, record := range records {
+		s.Add(record)
+	}
+}
+
 // Remove delete record from Set. If it found and deleted
 // return true, else false.
-func (s *Set) Remove(record domain.RecordData) bool {
+func (s *Set[K]) Remove(record K) bool {
 	if _, ok := s.set[record]; ok {
 		delete(s.set, record)
 		return true
@@ -32,8 +36,8 @@ func (s *Set) Remove(record domain.RecordData) bool {
 	return false
 }
 
-func (s *Set) Slice() []domain.RecordData {
-	res := make([]domain.RecordData, 0, len(s.set))
+func (s *Set[K]) Slice() []K {
+	res := make([]K, 0, len(s.set))
 
 	for k := range s.set {
 		res = append(res, k)
@@ -42,11 +46,11 @@ func (s *Set) Slice() []domain.RecordData {
 	return res
 }
 
-func (s *Set) Len() int {
+func (s *Set[K]) Len() int {
 	return len(s.set)
 }
 
-func (s *Set) Contains(value domain.RecordData) bool {
+func (s *Set[K]) Contains(value K) bool {
 	if _, ok := s.set[value]; ok {
 		return true
 	}

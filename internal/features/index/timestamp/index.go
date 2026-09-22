@@ -11,7 +11,7 @@ type Index struct {
 	tree *rbTree
 }
 
-func (i *Index) Get(key time.Time) (*set.Set, bool) {
+func (i *Index) Get(key time.Time) (*set.Set[domain.RecordData], bool) {
 	return i.tree.Find(key)
 }
 
@@ -23,7 +23,7 @@ func (i *Index) Remove(key time.Time) bool {
 	return i.tree.Remove(key)
 }
 
-func (i *Index) Min() *set.Set {
+func (i *Index) Min() *set.Set[domain.RecordData] {
 	if i.tree.Len() == 0 {
 		return nil
 	}
@@ -36,7 +36,7 @@ func (i *Index) Min() *set.Set {
 	return minNode.records
 }
 
-func (i *Index) Max() *set.Set {
+func (i *Index) Max() *set.Set[domain.RecordData] {
 	if i.tree.Len() == 0 {
 		return nil
 	}

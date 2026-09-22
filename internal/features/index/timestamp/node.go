@@ -16,7 +16,7 @@ const (
 
 type node struct {
 	key     time.Time
-	records *set.Set
+	records *set.Set[domain.RecordData]
 
 	left, right *node
 	parent      *node
@@ -25,7 +25,7 @@ type node struct {
 }
 
 func newNode(key time.Time, value domain.RecordData) *node {
-	s := set.NewSet(0)
+	s := set.New[domain.RecordData](0)
 	s.Add(value)
 
 	return &node{

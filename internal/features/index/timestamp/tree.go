@@ -211,7 +211,7 @@ func (t *rbTree) rightRotate(n *node) {
 // because if it will return domain.RecordData, it changes
 // from O(log n) to O(n). Also this func return bool which means
 // if true, it founded key, another not yet.
-func (t *rbTree) Find(key time.Time) (*set.Set, bool) {
+func (t *rbTree) Find(key time.Time) (*set.Set[domain.RecordData], bool) {
 	cur := t.root
 
 	for cur != nil {

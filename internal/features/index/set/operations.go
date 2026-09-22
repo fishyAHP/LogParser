@@ -1,9 +1,9 @@
 package set
 
-func Intersection(s1, s2 *Set) *Set {
-	small := minSet(s1, s2)
-	other := otherSet(small, s1, s2)
-	res := NewSet(small.Len())
+func Intersection[K comparable](s1, s2 *Set[K]) *Set[K] {
+	small := minSet[K](s1, s2)
+	other := otherSet[K](small, s1, s2)
+	res := New[K](small.Len())
 
 	for k := range small.set {
 		if other.Contains(k) {
@@ -14,8 +14,8 @@ func Intersection(s1, s2 *Set) *Set {
 	return res
 }
 
-func Union(s1, s2 *Set) *Set {
-	s := NewSet(s1.Len() + s2.Len())
+func Union[K comparable](s1, s2 *Set[K]) *Set[K] {
+	s := New[K](s1.Len() + s2.Len())
 	for k := range s1.set {
 		s.Add(k)
 	}
@@ -27,8 +27,8 @@ func Union(s1, s2 *Set) *Set {
 	return s
 }
 
-func Difference(s1, s2 *Set) *Set {
-	s := NewSet(s1.Len())
+func Difference[K comparable](s1, s2 *Set[K]) *Set[K] {
+	s := New[K](s1.Len())
 
 	for k := range s1.set {
 		if !s2.Contains(k) {
@@ -39,14 +39,14 @@ func Difference(s1, s2 *Set) *Set {
 	return s
 }
 
-func minSet(s1, s2 *Set) *Set {
+func minSet[K comparable](s1, s2 *Set[K]) *Set[K] {
 	if s1.Len() <= s2.Len() {
 		return s1
 	}
 	return s2
 }
 
-func otherSet(cur, s1, s2 *Set) *Set {
+func otherSet[K comparable](cur, s1, s2 *Set[K]) *Set[K] {
 	if cur == s1 {
 		return s2
 	}

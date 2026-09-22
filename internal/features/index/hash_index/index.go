@@ -10,7 +10,7 @@ import (
 
 type Index[K comparable] struct {
 	count int
-	idx   map[K]*set.Set
+	idx   map[K]*set.Set[domain.RecordData]
 	mtx   sync.RWMutex
 }
 
@@ -20,7 +20,7 @@ var newSet = func(length int) int {
 
 func NewIndex[K comparable]() *Index[K] {
 	return &Index[K]{
-		idx: make(map[K]*set.Set),
+		idx: make(map[K]*set.Set[domain.RecordData]),
 		mtx: sync.RWMutex{},
 	}
 }
@@ -37,13 +37,13 @@ func (i *Index[K]) Add(key K, value domain.RecordData) {
 	defer i.mtx.Unlock()
 
 	if _, ok := i.idx[key]; !ok {
-		i.idx[key] = set.NewSet(newSet(i.count))
+		i.idx[key] = set.New[domain.RecordData](newSet(i.count))
 	}
 	i.idx[key].Add(value)
 	i.count++
 }
 
-func (i *Index[K]) Get(key K) (*set.Set, bool) {
+func (i *Index[K]) Get(key K) (*set.Set[domain.RecordData], bool) {
 	i.mtx.RLock()
 	defer i.mtx.RUnlock()
 
@@ -72,7 +72,7 @@ func (i *Index[K]) Clear() {
 	i.mtx.Lock()
 	defer i.mtx.Unlock()
 
-	i.idx = make(map[K]*set.Set)
+	i.idx = make(map[K]*set.Set[domain.RecordData])
 	i.count = 0
 }
 
