@@ -27,8 +27,20 @@ func Union(s1, s2 *Set) *Set {
 	return s
 }
 
+func Difference(s1, s2 *Set) *Set {
+	s := NewSet(s1.Len())
+
+	for k := range s1.set {
+		if !s2.Contains(k) {
+			s.Add(k)
+		}
+	}
+
+	return s
+}
+
 func minSet(s1, s2 *Set) *Set {
-	if s1.Len() < s2.Len() {
+	if s1.Len() <= s2.Len() {
 		return s1
 	}
 	return s2

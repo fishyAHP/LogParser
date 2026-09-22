@@ -43,7 +43,7 @@ func (i *Index[K]) Add(key K, value domain.RecordData) {
 	i.count++
 }
 
-func (i *Index[K]) Get(key K) ([]domain.RecordData, bool) {
+func (i *Index[K]) Get(key K) (*set.Set, bool) {
 	i.mtx.RLock()
 	defer i.mtx.RUnlock()
 
@@ -52,7 +52,7 @@ func (i *Index[K]) Get(key K) ([]domain.RecordData, bool) {
 		return nil, false
 	}
 
-	return s.Slice(), true
+	return s, true
 }
 
 func (i *Index[K]) Remove(key K) bool {

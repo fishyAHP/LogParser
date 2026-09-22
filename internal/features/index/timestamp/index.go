@@ -4,13 +4,14 @@ import (
 	"time"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
+	"fishyAHP/LogParser.git/internal/features/index/set"
 )
 
 type Index struct {
 	tree *rbTree
 }
 
-func (i *Index) Get(key time.Time) ([]domain.RecordData, bool) {
+func (i *Index) Get(key time.Time) (*set.Set, bool) {
 	return i.tree.Find(key)
 }
 
@@ -22,30 +23,30 @@ func (i *Index) Remove(key time.Time) bool {
 	return i.tree.Remove(key)
 }
 
-func (i *Index) Min() []domain.RecordData {
+func (i *Index) Min() *set.Set {
 	if i.tree.Len() == 0 {
 		return nil
 	}
 	if i.tree.Len() == 1 {
-		return i.tree.root.records.Slice()
+		return i.tree.root.records
 	}
 
 	minNode := i.tree.Min()
 
-	return minNode.records.Slice()
+	return minNode.records
 }
 
-func (i *Index) Max() []domain.RecordData {
+func (i *Index) Max() *set.Set {
 	if i.tree.Len() == 0 {
 		return nil
 	}
 	if i.tree.Len() == 1 {
-		return i.tree.root.records.Slice()
+		return i.tree.root.records
 	}
 
 	maxNode := i.tree.Max()
 
-	return maxNode.records.Slice()
+	return maxNode.records
 }
 
 func (i *Index) Len() int {

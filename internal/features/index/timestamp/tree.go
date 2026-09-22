@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
+	"fishyAHP/LogParser.git/internal/features/index/set"
 )
 
 type rbTree struct {
@@ -210,7 +211,7 @@ func (t *rbTree) rightRotate(n *node) {
 // because if it will return domain.RecordData, it changes
 // from O(log n) to O(n). Also this func return bool which means
 // if true, it founded key, another not yet.
-func (t *rbTree) Find(key time.Time) ([]domain.RecordData, bool) {
+func (t *rbTree) Find(key time.Time) (*set.Set, bool) {
 	cur := t.root
 
 	for cur != nil {
@@ -222,7 +223,7 @@ func (t *rbTree) Find(key time.Time) ([]domain.RecordData, bool) {
 		case -1:
 			cur = cur.left
 		default:
-			return cur.records.Slice(), true
+			return cur.records, true
 		}
 	}
 
