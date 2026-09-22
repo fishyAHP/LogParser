@@ -45,3 +45,10 @@ func (s *Set) Slice() []domain.RecordData {
 func (s *Set) Len() int {
 	return len(s.set)
 }
+
+func (s *Set) Contains(value domain.RecordData) bool {
+	if _, ok := s.set[value]; ok {
+		return true
+	}
+	return false
+}
