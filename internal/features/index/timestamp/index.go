@@ -15,8 +15,16 @@ func (i *Index) Get(key time.Time) (*set.Set[domain.RecordData], bool) {
 	return i.tree.Find(key)
 }
 
-func (i *Index) Range(from, to time.Time) ([]domain.RecordData, bool) {
-	return i.tree.Range(from, to)
+func (i *Index) Range(from, to time.Time) (*set.Set[domain.RecordData], bool) {
+	records, ok := i.tree.Range(from, to)
+	if !ok {
+		return nil, false
+	}
+
+	s := set.New[domain.RecordData](len(records))
+	s.AddMany(records...)
+
+	return s, true
 }
 
 func (i *Index) Remove(key time.Time) bool {

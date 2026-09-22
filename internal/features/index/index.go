@@ -19,7 +19,7 @@ type Index[K comparable] interface {
 type TimeIndex interface {
 	Index[time.Time]
 
-	Range(time.Time, time.Time) ([]domain.RecordData, bool)
+	Range(time.Time, time.Time) (*set.Set[domain.RecordData], bool)
 	Min() *set.Set[domain.RecordData]
 	Max() *set.Set[domain.RecordData]
 }
