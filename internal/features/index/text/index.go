@@ -25,6 +25,9 @@ func New() *Index {
 
 func (i *Index) Add(s string, data domain.RecordData) {
 	tokens := i.Tokenizer.Tokenize(s)
+	sett := set.New[words.Token](len(tokens))
+	sett.AddMany(tokens...)
+	tokens = sett.Slice()
 
 	for _, token := range tokens {
 		if _, ok := i.invert[token]; !ok {
