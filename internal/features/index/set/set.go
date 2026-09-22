@@ -12,10 +12,13 @@ func NewSet(length int) *Set {
 	}
 }
 
-func (s *Set) Add(record domain.RecordData) {
+func (s *Set) Add(record domain.RecordData) bool {
 	if _, ok := s.set[record]; !ok {
 		s.set[record] = struct{}{}
+		return true
 	}
+
+	return false
 }
 
 // Remove delete record from Set. If it found and deleted

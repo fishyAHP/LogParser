@@ -2,6 +2,7 @@ package timestamp
 
 import (
 	"errors"
+	"math"
 	"time"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
@@ -89,7 +90,9 @@ func (t *rbTree) Insert(key time.Time, value domain.RecordData) (err error) {
 				return
 			}
 		default:
-			current.add(value)
+			if ok := current.add(value); !ok {
+				return errors.New("key already exist")
+			}
 			return
 		}
 	}
@@ -271,7 +274,11 @@ func (t *rbTree) Len() int {
 }
 
 func (t *rbTree) Height() int {
-	return t.nodesCount
+	return int(
+		2 * math.Log2(
+			float64(t.nodesCount+1),
+		),
+	)
 }
 
 func (t *rbTree) Min() *node {

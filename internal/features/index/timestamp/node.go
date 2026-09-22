@@ -35,8 +35,8 @@ func newNode(key time.Time, value domain.RecordData) *node {
 	}
 }
 
-func (n *node) add(value domain.RecordData) {
-	n.records.Add(value)
+func (n *node) add(value domain.RecordData) bool {
+	return n.records.Add(value)
 }
 
 func (n *node) uncle() *node {

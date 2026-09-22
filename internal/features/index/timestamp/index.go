@@ -23,7 +23,10 @@ func (i *Index) Remove(key time.Time) bool {
 }
 
 func (i *Index) Min() []domain.RecordData {
-	if i.tree.Len() <= 1 {
+	if i.tree.Len() == 0 {
+		return nil
+	}
+	if i.tree.Len() == 1 {
 		return i.tree.root.records.Slice()
 	}
 
@@ -33,7 +36,10 @@ func (i *Index) Min() []domain.RecordData {
 }
 
 func (i *Index) Max() []domain.RecordData {
-	if i.tree.Len() <= 1 {
+	if i.tree.Len() == 0 {
+		return nil
+	}
+	if i.tree.Len() == 1 {
 		return i.tree.root.records.Slice()
 	}
 
