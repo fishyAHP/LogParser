@@ -44,9 +44,7 @@ func (i *Indexer) Index(record domain.RecordData, entry domain.LogEntry) {
 		i.ip.Add(entry.IP, record)
 	}
 
-	if err := i.timestamp.Add(entry.Timestamp, record); err != nil {
-		// залогируем
-	}
+	i.timestamp.Add(entry.Timestamp, record)
 }
 
 func (i *Indexer) Clear() {

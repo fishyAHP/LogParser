@@ -303,3 +303,7 @@ func (t *rbTree) Clear() {
 func (t *rbTree) Remove(key time.Time) bool {
 	return false
 }
+
+func (t *rbTree) Delete(key time.Time, value domain.RecordData) bool {
+	return false
+}

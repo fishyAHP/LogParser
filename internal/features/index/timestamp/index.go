@@ -58,6 +58,10 @@ func (i *Index) Add(key time.Time, value domain.RecordData) {
 	}
 }
 
+func (i *Index) Delete(key time.Time, value domain.RecordData) bool {
+	return i.tree.Delete(key, value)
+}
+
 func (i *Index) Clear() {
 	i.tree.Clear()
 }

@@ -10,6 +10,7 @@ type Index[K comparable] interface {
 	Add(K, domain.RecordData)
 	Get(K) ([]domain.RecordData, bool)
 	Remove(K) bool
+	Delete(K, domain.RecordData) bool
 	Len() int
 	Clear()
 }

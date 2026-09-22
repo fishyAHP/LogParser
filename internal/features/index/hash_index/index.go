@@ -47,12 +47,12 @@ func (i *Index[K]) Get(key K) ([]domain.RecordData, bool) {
 	i.mtx.RLock()
 	defer i.mtx.RUnlock()
 
-	set, ok := i.idx[key]
+	s, ok := i.idx[key]
 	if !ok {
 		return nil, false
 	}
 
-	return set.Slice(), true
+	return s.Slice(), true
 }
 
 func (i *Index[K]) Remove(key K) bool {
@@ -74,4 +74,16 @@ func (i *Index[K]) Clear() {
 
 	i.idx = make(map[K]*set.Set)
 	i.count = 0
+}
+
+func (i *Index[K]) Delete(key K, value domain.RecordData) bool {
+	i.mtx.Lock()
+	defer i.mtx.Unlock()
+
+	s, ok := i.idx[key]
+	if !ok {
+		return false
+	}
+
+	return s.Remove(value)
 }
