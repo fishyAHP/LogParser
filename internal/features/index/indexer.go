@@ -1,27 +1,30 @@
 package index
 
 import (
+	"errors"
 	"strings"
 	"time"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
 	"fishyAHP/LogParser.git/internal/features/index/hash_index"
+	"fishyAHP/LogParser.git/internal/features/index/set"
 	"fishyAHP/LogParser.git/internal/features/index/text"
 	"fishyAHP/LogParser.git/internal/features/index/text/words"
 	"fishyAHP/LogParser.git/internal/features/index/timestamp"
 )
 
-type Indexer struct {
+type IndexService struct {
 	level     Index[domain.LogLevel]
 	component Index[domain.LogComponent]
 	pid       Index[domain.PID]
 	ip        Index[domain.IP]
+
 	timestamp TimeIndex
 	text      TextIndex
 }
 
-func New(timeAccuracy time.Duration) *Indexer {
-	return &Indexer{
+func New(timeAccuracy time.Duration) *IndexService {
+	return &IndexService{
 		level:     hash_index.New[domain.LogLevel](),
 		component: hash_index.New[domain.LogComponent](),
 		pid:       hash_index.New[domain.PID](),
@@ -31,12 +34,12 @@ func New(timeAccuracy time.Duration) *Indexer {
 	}
 }
 
-func (i *Indexer) SetTokenizer(tokenizer *words.Tokenizer) {
+func (i *IndexService) SetTokenizer(tokenizer *words.Tokenizer) {
 	t := (i.text).(*text.Index)
 	t.Tokenizer = tokenizer
 }
 
-func (i *Indexer) Index(record domain.RecordData, entry domain.LogEntry) {
+func (i *IndexService) Index(record domain.RecordData, entry domain.LogEntry) {
 	if strings.TrimSpace(string(entry.Level)) != "" {
 		i.level.Add(entry.Level, record)
 	}
@@ -56,10 +59,50 @@ func (i *Indexer) Index(record domain.RecordData, entry domain.LogEntry) {
 	i.timestamp.Add(entry.Timestamp, record)
 }
 
-func (i *Indexer) Clear() {
+func (i *IndexService) Clear() {
 	i.level.Clear()
 	i.component.Clear()
 	i.pid.Clear()
 	i.ip.Clear()
 	i.timestamp.Clear()
+}
+
+func (i *IndexService) ByLevel(level domain.LogLevel) (*set.Set[domain.RecordData], error) {
+	sett, ok := i.level.Get(level)
+	if !ok {
+		return nil, errors.New("no find level")
+	}
+
+	return sett, nil
+}
+
+func (i *IndexService) ByComponent(component domain.LogComponent) (*set.Set[domain.RecordData], error) {
+	sett, ok := i.component.Get(component)
+	if !ok {
+		return nil, errors.New("no find component")
+	}
+
+	return sett, nil
+}
+
+func (i *IndexService) ByIP(ip domain.IP) (*set.Set[domain.RecordData], error) {
+	sett, ok := i.ip.Get(ip)
+	if !ok {
+		return nil, errors.New("no find ip")
+	}
+
+	return sett, nil
+}
+
+func (i *IndexService) ByTimestampRange(from, to time.Time) (*set.Set[domain.RecordData], error) {
+	sett, ok := i.timestamp.Range(from, to)
+	if !ok {
+		return nil, errors.New("no find component")
+	}
+
+	return sett, nil
+}
+
+func (i *IndexService) ByText(text string) *set.Set[domain.RecordData] {
+	return i.text.Get(text)
 }
