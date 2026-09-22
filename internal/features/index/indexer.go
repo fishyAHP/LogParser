@@ -6,6 +6,8 @@ import (
 
 	"fishyAHP/LogParser.git/internal/core/domain"
 	"fishyAHP/LogParser.git/internal/features/index/hash_index"
+	"fishyAHP/LogParser.git/internal/features/index/text"
+	"fishyAHP/LogParser.git/internal/features/index/text/words"
 	"fishyAHP/LogParser.git/internal/features/index/timestamp"
 )
 
@@ -15,16 +17,23 @@ type Indexer struct {
 	pid       Index[domain.PID]
 	ip        Index[domain.IP]
 	timestamp TimeIndex
+	text      TextIndex
 }
 
 func New(timeAccuracy time.Duration) *Indexer {
 	return &Indexer{
-		level:     hash_index.NewIndex[domain.LogLevel](),
-		component: hash_index.NewIndex[domain.LogComponent](),
-		pid:       hash_index.NewIndex[domain.PID](),
-		ip:        hash_index.NewIndex[domain.IP](),
+		level:     hash_index.New[domain.LogLevel](),
+		component: hash_index.New[domain.LogComponent](),
+		pid:       hash_index.New[domain.PID](),
+		ip:        hash_index.New[domain.IP](),
 		timestamp: timestamp.New(timeAccuracy),
+		text:      text.New(),
 	}
+}
+
+func (i *Indexer) SetTokenizer(tokenizer *words.Tokenizer) {
+	t := (i.text).(*text.Index)
+	t.Tokenizer = tokenizer
 }
 
 func (i *Indexer) Index(record domain.RecordData, entry domain.LogEntry) {

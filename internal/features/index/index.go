@@ -23,3 +23,12 @@ type TimeIndex interface {
 	Min() *set.Set[domain.RecordData]
 	Max() *set.Set[domain.RecordData]
 }
+
+type TextIndex interface {
+	Add(string, domain.RecordData)
+	Get(string) *set.Set[domain.RecordData]
+	RemoveTokens(string) bool
+	RemoveRecord(string, domain.RecordData) bool
+	Len() int
+	Clear()
+}

@@ -18,7 +18,7 @@ var newSet = func(length int) int {
 	return int(math.Pow(float64(length), 0.5))
 }
 
-func NewIndex[K comparable]() *Index[K] {
+func New[K comparable]() *Index[K] {
 	return &Index[K]{
 		idx: make(map[K]*set.Set[domain.RecordData]),
 		mtx: sync.RWMutex{},
