@@ -12,7 +12,7 @@ import (
 	"fishyAHP/LogParser.git/internal/features/index/timestamp"
 )
 
-type IndexService struct {
+type Service struct {
 	level     Index[domain.LogLevel]
 	component Index[domain.LogComponent]
 	pid       Index[domain.PID]
@@ -22,8 +22,8 @@ type IndexService struct {
 	text      TextIndex
 }
 
-func New(timeAccuracy time.Duration) *IndexService {
-	return &IndexService{
+func New(timeAccuracy time.Duration) *Service {
+	return &Service{
 		level:     hash_index.New[domain.LogLevel](),
 		component: hash_index.New[domain.LogComponent](),
 		pid:       hash_index.New[domain.PID](),
@@ -33,41 +33,41 @@ func New(timeAccuracy time.Duration) *IndexService {
 	}
 }
 
-func (i *IndexService) SetTokenizer(tokenizer *words.Tokenizer) {
-	t := (i.text).(*text.Index)
+func (s *Service) SetTokenizer(tokenizer *words.Tokenizer) {
+	t := (s.text).(*text.Index)
 	t.Tokenizer = tokenizer
 }
 
-func (i *IndexService) Index(record domain.RecordData, entry domain.LogEntry) {
+func (s *Service) Index(record domain.RecordData, entry domain.LogEntry) {
 	if strings.TrimSpace(string(entry.Level)) != "" {
-		i.level.Add(entry.Level, record)
+		s.level.Add(entry.Level, record)
 	}
 
 	if strings.TrimSpace(entry.Component) != "" {
-		i.component.Add(entry.Component, record)
+		s.component.Add(entry.Component, record)
 	}
 
 	if entry.PID != 0 {
-		i.pid.Add(entry.PID, record)
+		s.pid.Add(entry.PID, record)
 	}
 
 	if !entry.IP.IsZero() {
-		i.ip.Add(entry.IP, record)
+		s.ip.Add(entry.IP, record)
 	}
 
-	i.timestamp.Add(entry.Timestamp, record)
+	s.timestamp.Add(entry.Timestamp, record)
 }
 
-func (i *IndexService) Clear() {
-	i.level.Clear()
-	i.component.Clear()
-	i.pid.Clear()
-	i.ip.Clear()
-	i.timestamp.Clear()
+func (s *Service) Clear() {
+	s.level.Clear()
+	s.component.Clear()
+	s.pid.Clear()
+	s.ip.Clear()
+	s.timestamp.Clear()
 }
 
-func (i *IndexService) ByLevel(level domain.LogLevel) *set.Set[domain.RecordData] {
-	sett, ok := i.level.Get(level)
+func (s *Service) ByLevel(level domain.LogLevel) *set.Set[domain.RecordData] {
+	sett, ok := s.level.Get(level)
 	if !ok {
 		return nil
 	}
@@ -75,8 +75,8 @@ func (i *IndexService) ByLevel(level domain.LogLevel) *set.Set[domain.RecordData
 	return sett
 }
 
-func (i *IndexService) ByComponent(component domain.LogComponent) *set.Set[domain.RecordData] {
-	sett, ok := i.component.Get(component)
+func (s *Service) ByComponent(component domain.LogComponent) *set.Set[domain.RecordData] {
+	sett, ok := s.component.Get(component)
 	if !ok {
 		return nil
 	}
@@ -84,8 +84,8 @@ func (i *IndexService) ByComponent(component domain.LogComponent) *set.Set[domai
 	return sett
 }
 
-func (i *IndexService) ByIP(ip domain.IP) *set.Set[domain.RecordData] {
-	sett, ok := i.ip.Get(ip)
+func (s *Service) ByIP(ip domain.IP) *set.Set[domain.RecordData] {
+	sett, ok := s.ip.Get(ip)
 	if !ok {
 		return nil
 	}
@@ -93,8 +93,8 @@ func (i *IndexService) ByIP(ip domain.IP) *set.Set[domain.RecordData] {
 	return sett
 }
 
-func (i *IndexService) ByTimestampRange(from, to time.Time) *set.Set[domain.RecordData] {
-	sett, ok := i.timestamp.Range(from, to)
+func (s *Service) ByTimestampRange(from, to time.Time) *set.Set[domain.RecordData] {
+	sett, ok := s.timestamp.Range(from, to)
 	if !ok {
 		return nil
 	}
@@ -102,6 +102,6 @@ func (i *IndexService) ByTimestampRange(from, to time.Time) *set.Set[domain.Reco
 	return sett
 }
 
-func (i *IndexService) ByText(text string) *set.Set[domain.RecordData] {
-	return i.text.Get(text)
+func (s *Service) ByText(text string) *set.Set[domain.RecordData] {
+	return s.text.Get(text)
 }
