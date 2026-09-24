@@ -68,28 +68,26 @@ func (l *Lexer) Parse(input string) ([]Lexeme, error) {
 		case '<':
 			flush()
 
-			if i+1 < len(runes) {
-				if runes[i+1] == '=' {
-					lexeme.Type = LessOrEqual
-					lexeme.Literal = "<="
-					i++
-				} else {
-					lexeme.Type = Less
-					lexeme.Literal = "<"
-				}
+			lexeme.Type = Less
+			lexeme.Literal = "<"
+
+			if i+1 < len(runes) &&
+				runes[i+1] == '=' {
+				lexeme.Type = LessOrEqual
+				lexeme.Literal = "<="
+				i++
 			}
 		case '>':
 			flush()
 
-			if i+1 < len(runes) {
-				if runes[i+1] == '=' {
-					lexeme.Type = BiggerOrEqual
-					lexeme.Literal = ">="
-					i++
-				} else {
-					lexeme.Type = Bigger
-					lexeme.Literal = ">"
-				}
+			lexeme.Type = Bigger
+			lexeme.Literal = ">"
+
+			if i+1 < len(runes) &&
+				runes[i+1] == '=' {
+				lexeme.Type = BiggerOrEqual
+				lexeme.Literal = ">="
+				i++
 			}
 		case '=':
 			flush()
@@ -139,16 +137,6 @@ func (l *Lexer) Parse(input string) ([]Lexeme, error) {
 	return res, nil
 }
 
-func isIdentifier(s string) bool {
-	m := map[string]struct{}{
-		"level": {}, "component": {}, "pid": {},
-		"ip": {}, "time": {}, "text": {},
-	}
-
-	_, ok := m[s]
-	return ok
-}
-
 func toLexeme(s string) Lexeme {
 	var lexeme Lexeme
 	switch s {
@@ -158,11 +146,7 @@ func toLexeme(s string) Lexeme {
 		lexeme.Type = Or
 	default:
 		if _, err := strconv.Atoi(s); err != nil {
-			if isIdentifier(strings.ToLower(s)) {
-				lexeme.Type = Identifier
-				break
-			}
-			lexeme.Type = String
+			lexeme.Type = Identifier
 			break
 		}
 		lexeme.Type = Number
