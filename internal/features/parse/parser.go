@@ -1,8 +1,11 @@
-package features_parse
+package parse
 
 import (
+	"strconv"
+	"time"
+
 	"fishyAHP/LogParser.git/internal/core/domain"
-	"fishyAHP/LogParser.git/internal/core/scheme"
+	"fishyAHP/LogParser.git/internal/features/parse/scheme"
 	"fishyAHP/LogParser.git/internal/features/tokenizer"
 )
 
@@ -25,20 +28,19 @@ func (p *LogParser) Parse(data []tokenizer.Token) (domain.LogEntry, error) {
 	}
 
 	logEntry := domain.LogEntry{
-		Fields: make(map[string]string),
+		Other: make(map[string]string),
 	}
 
 	for i, field := range p.scheme.Parameters {
 		value := cleanToken[i]
 
 		switch field.FieldType {
-
 		case scheme.IntType:
 			_, err := strconv.Atoi(value)
 			if err != nil {
 				return domain.LogEntry{}, err
 			}
-			logEntry.Fields[field.Name] = value
+			logEntry.Other[field.Name] = value
 
 		case scheme.TimeType:
 			parsedTime, err := time.Parse(time.RFC3339, value)
@@ -51,7 +53,7 @@ func (p *LogParser) Parse(data []tokenizer.Token) (domain.LogEntry, error) {
 			if field.Name == "message" {
 				logEntry.Message = value
 			} else {
-				logEntry.Fields[field.Name] = value
+				logEntry.Other[field.Name] = value
 			}
 		}
 	}

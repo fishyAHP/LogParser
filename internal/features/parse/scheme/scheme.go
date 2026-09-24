@@ -22,7 +22,7 @@ type Field struct {
 
 type Scheme struct {
 	separator  rune
-	parameters []Field
+	Parameters []Field
 }
 
 func (s *Scheme) Validate() bool {
