@@ -88,28 +88,17 @@ func (l *Lexer) Parse(input string) ([]Lexeme, error) {
 
 		lexeme := Lexeme{}
 		switch runes[i] {
-		case '<':
+		case '<', '>':
+			op := runes[i]
 			flush()
 
-			lexeme.Type = Less
-			lexeme.Literal = "<"
-
+			lexeme.Type = l.operators[string(op)]
+			lexeme.Literal = string(op)
 			if i+1 < len(runes) &&
 				runes[i+1] == '=' {
-				lexeme.Type = LessOrEqual
-				lexeme.Literal = "<="
-				i++
-			}
-		case '>':
-			flush()
-
-			lexeme.Type = Bigger
-			lexeme.Literal = ">"
-
-			if i+1 < len(runes) &&
-				runes[i+1] == '=' {
-				lexeme.Type = BiggerOrEqual
-				lexeme.Literal = ">="
+				newOp := string(op) + string('=')
+				lexeme.Type = l.operators[newOp]
+				lexeme.Literal = newOp
 				i++
 			}
 		case '=':
