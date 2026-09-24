@@ -10,11 +10,11 @@ type DataType uint8
 
 const (
 	Invalid DataType = iota
-	String
-	Int
-	Bool
-	Float
-	Time
+	StringType
+	IntType
+	BoolType
+	FloatType
+	TimeType
 	Array
 	Map
 	Object
@@ -64,8 +64,8 @@ func (f *Field) Validate() error {
 	}
 
 	m := map[DataType]struct{}{
-		String: {}, Int: {}, Float: {},
-		Bool: {}, Time: {}, Object: {},
+		StringType: {}, IntType: {}, FloatType: {},
+		BoolType: {}, TimeType: {}, Object: {},
 		Array: {}, Map: {}, Invalid: {},
 	}
 
