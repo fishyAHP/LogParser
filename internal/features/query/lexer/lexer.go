@@ -1,6 +1,7 @@
 package lexer
 
 import (
+	"errors"
 	"strconv"
 	"strings"
 	"unicode"
@@ -40,7 +41,7 @@ var EOFLexeme = Lexeme{
 	Type: EOF,
 }
 
-func (l *Lexer) Parse(input string) []Lexeme {
+func (l *Lexer) Parse(input string) ([]Lexeme, error) {
 	runes := []rune(strings.TrimSpace(input))
 	res := make([]Lexeme, 0, len(runes))
 
@@ -105,22 +106,24 @@ func (l *Lexer) Parse(input string) []Lexeme {
 
 			lexeme.Type = RightBracket
 			lexeme.Literal = ")"
-		case '\'':
-			for j := i; j < len(runes) && runes[j] != '\''; j++ {
-				builder.WriteRune(runes[j])
-				i++
+		case '"', '\'':
+			quote := runes[i]
+			j := i + 1
+			if j >= len(runes) {
+				return nil, errors.New("opened quote at end of string")
 			}
 
-			flush()
-			continue
-		case '"':
-			for j := i; j < len(runes) || runes[j] == '"'; j++ {
+			for runes[j] != quote {
 				builder.WriteRune(runes[j])
-				i++
+				if j == len(runes)-1 {
+					return nil, errors.New("need missing literal quote")
+				}
+				j++
 			}
+			i = j
 
-			flush()
-			continue
+			lexeme.Type = String
+			lexeme.Literal = builder.String()
 		default:
 			builder.WriteRune(runes[i])
 			continue
@@ -133,7 +136,7 @@ func (l *Lexer) Parse(input string) []Lexeme {
 	flush()
 	res = append(res, EOFLexeme)
 
-	return res
+	return res, nil
 }
 
 func isIdentifier(s string) bool {
@@ -155,7 +158,7 @@ func toLexeme(s string) Lexeme {
 		lexeme.Type = Or
 	default:
 		if _, err := strconv.Atoi(s); err != nil {
-			if isIdentifier(s) {
+			if isIdentifier(strings.ToLower(s)) {
 				lexeme.Type = Identifier
 				break
 			}
