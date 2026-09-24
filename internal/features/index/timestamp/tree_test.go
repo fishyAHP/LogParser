@@ -70,8 +70,8 @@ func TestAddDuplicateKey(t *testing.T) {
 		t.Fatalf("elemsCount = %d, want 3", tree.elemsCount)
 	}
 
-	if len(tree.root.records) != 3 {
-		t.Fatalf("records = %d, want 3", len(tree.root.records))
+	if len(tree.root.records.Slice()) != 3 {
+		t.Fatalf("records = %d, want 3", len(tree.root.records.Slice()))
 	}
 
 	if tree.root.left != nil || tree.root.right != nil {
@@ -97,8 +97,8 @@ func TestDifferentSecondsSameMinute(t *testing.T) {
 		t.Fatal("root is nil")
 	}
 
-	if len(tree.root.records) != 2 {
-		t.Fatalf("records = %d, want 2", len(tree.root.records))
+	if len(tree.root.records.Slice()) != 2 {
+		t.Fatalf("records = %d, want 2", len(tree.root.records.Slice()))
 	}
 
 	if tree.root.left != nil || tree.root.right != nil {

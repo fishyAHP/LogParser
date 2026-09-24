@@ -4,7 +4,6 @@ import (
 	"errors"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
-	"fishyAHP/LogParser.git/internal/features/index"
 	"fishyAHP/LogParser.git/internal/features/index/set"
 )
 
@@ -60,13 +59,18 @@ func (b *BinaryExpr) IsExpr() {
 
 }
 
-func (c *Condition) Execute(i *index.IndexService) (*set.Set[domain.RecordData], error) {
+func (c *Condition) Execute() (*set.Set[domain.RecordData], error) {
 	switch c.Field {
 	case Level:
 		if c.Operator != Equal {
 			return nil, errors.New("unknown operation for level index")
 		}
 
-		return
+		return nil, nil
 	}
+	return nil, nil
+}
+
+func (b *BinaryExpr) Execute() {
+
 }
