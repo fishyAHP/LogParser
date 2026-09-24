@@ -3,6 +3,7 @@ package lexer
 import (
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 type Lexer struct {
@@ -26,8 +27,8 @@ const (
 	Less
 	LessOrEqual
 
-	And
 	Or
+	And
 
 	LeftBracket
 	RightBracket
@@ -36,8 +37,7 @@ const (
 )
 
 var EOFLexeme = Lexeme{
-	Type:    EOF,
-	Literal: "\n",
+	Type: EOF,
 }
 
 func (l *Lexer) Parse(input string) []Lexeme {
@@ -45,18 +45,51 @@ func (l *Lexer) Parse(input string) []Lexeme {
 	res := make([]Lexeme, 0, len(runes))
 
 	var builder strings.Builder
-	for _, r := range runes {
-		flush := func() {
-			s := builder.String()
-			lex := toLexeme(s)
+	flush := func() {
+		if builder.Len() == 0 {
+			return
+		}
 
-			res = append(res, lex)
+		s := builder.String()
+		lex := toLexeme(s)
 
-			builder.Reset()
+		res = append(res, lex)
+		builder.Reset()
+	}
+	for i := 0; i < len(runes); i++ {
+		if unicode.IsSpace(runes[i]) {
+			flush()
+			continue
 		}
 
 		lexeme := Lexeme{}
-		switch r {
+		switch runes[i] {
+		case '<':
+			flush()
+
+			if i+1 < len(runes) {
+				if runes[i+1] == '=' {
+					lexeme.Type = LessOrEqual
+					lexeme.Literal = "<="
+					i++
+				} else {
+					lexeme.Type = Less
+					lexeme.Literal = "<"
+				}
+			}
+		case '>':
+			flush()
+
+			if i+1 < len(runes) {
+				if runes[i+1] == '=' {
+					lexeme.Type = BiggerOrEqual
+					lexeme.Literal = ">="
+					i++
+				} else {
+					lexeme.Type = Bigger
+					lexeme.Literal = ">"
+				}
+			}
 		case '=':
 			flush()
 
@@ -71,11 +104,25 @@ func (l *Lexer) Parse(input string) []Lexeme {
 			flush()
 
 			lexeme.Type = RightBracket
-			lexeme.Literal = "("
-		case ' ':
+			lexeme.Literal = ")"
+		case '\'':
+			for j := i; j < len(runes) && runes[j] != '\''; j++ {
+				builder.WriteRune(runes[j])
+				i++
+			}
+
 			flush()
+			continue
+		case '"':
+			for j := i; j < len(runes) || runes[j] == '"'; j++ {
+				builder.WriteRune(runes[j])
+				i++
+			}
+
+			flush()
+			continue
 		default:
-			builder.WriteRune(r)
+			builder.WriteRune(runes[i])
 			continue
 		}
 
@@ -83,13 +130,15 @@ func (l *Lexer) Parse(input string) []Lexeme {
 		res = append(res, lexeme)
 	}
 
-	res = append(res)
+	flush()
+	res = append(res, EOFLexeme)
+
 	return res
 }
 
 func isIdentifier(s string) bool {
 	m := map[string]struct{}{
-		"level": {}, "component": {},
+		"level": {}, "component": {}, "pid": {},
 		"ip": {}, "time": {}, "text": {},
 	}
 
@@ -100,14 +149,6 @@ func isIdentifier(s string) bool {
 func toLexeme(s string) Lexeme {
 	var lexeme Lexeme
 	switch s {
-	case ">":
-		lexeme.Type = Bigger
-	case ">=":
-		lexeme.Type = BiggerOrEqual
-	case "<":
-		lexeme.Type = Less
-	case "<=":
-		lexeme.Type = LessOrEqual
 	case "and":
 		lexeme.Type = And
 	case "or":
