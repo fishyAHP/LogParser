@@ -99,7 +99,6 @@ func (q *Querizer) parseAnd(lexemes []lexer.Lexeme) (Expr, error) {
 }
 
 func (q *Querizer) parsePrimary(lexemes []lexer.Lexeme) (Expr, error) {
-
 	if q.pos < len(lexemes) &&
 		lexemes[q.pos].Type == lexer.LeftParen {
 		q.pos++
