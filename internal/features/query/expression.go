@@ -1,24 +1,22 @@
 package query
 
 import (
-	"errors"
-
 	"fishyAHP/LogParser.git/internal/core/domain"
 	"fishyAHP/LogParser.git/internal/features/index/set"
 )
 
-type expr interface {
+type Expr interface {
 	IsExpr()
 }
 
 type BinaryExpr struct {
-	Left     expr
+	Left     Expr
 	Operator LogicalOperator
-	Right    expr
+	Right    Expr
 }
 
 type Condition struct {
-	Field    Field
+	Field    string
 	Operator CompareOperator
 	Value    string
 }
@@ -30,6 +28,17 @@ const (
 	Or
 )
 
+func (lo LogicalOperator) String() string {
+	switch lo {
+	case And:
+		return "AND"
+	case Or:
+		return "OR"
+	default:
+		return "unknown"
+	}
+}
+
 type CompareOperator uint8
 
 const (
@@ -40,16 +49,22 @@ const (
 	LessOrEqual
 )
 
-type Field string
-
-const (
-	Level     Field = "level"
-	PID       Field = "pid"
-	Component Field = "component"
-	IP        Field = "ip"
-	Timestamp Field = "timestamp"
-	Message   Field = "message"
-)
+func (c CompareOperator) String() string {
+	switch c {
+	case Equal:
+		return "="
+	case Bigger:
+		return ">"
+	case BiggerOrEqual:
+		return ">="
+	case Less:
+		return "<"
+	case LessOrEqual:
+		return "<="
+	default:
+		return "unknown"
+	}
+}
 
 func (c *Condition) IsExpr() {
 
@@ -60,14 +75,6 @@ func (b *BinaryExpr) IsExpr() {
 }
 
 func (c *Condition) Execute() (*set.Set[domain.RecordData], error) {
-	switch c.Field {
-	case Level:
-		if c.Operator != Equal {
-			return nil, errors.New("unknown operation for level index")
-		}
-
-		return nil, nil
-	}
 	return nil, nil
 }
 

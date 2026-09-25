@@ -36,7 +36,7 @@ type Lexeme struct {
 type LexemeType uint8
 
 const (
-	// Identifier String and Number are fields
+	// Identifier String and Number are lexic string
 	Identifier LexemeType = iota
 	String
 	Number
@@ -52,9 +52,9 @@ const (
 	Or
 	And
 
-	// LeftBracket and RightBracket lexic string
-	LeftBracket
-	RightBracket
+	// LeftParen and RightParen lexic string
+	LeftParen
+	RightParen
 
 	// EOF - end of file or string
 	EOF
@@ -62,6 +62,39 @@ const (
 
 var EOFLexeme = Lexeme{
 	Type: EOF,
+}
+
+func (t LexemeType) String() string {
+	switch t {
+	case Identifier:
+		return "Identifier"
+	case String:
+		return "String"
+	case Number:
+		return "Number"
+	case Equal:
+		return "="
+	case Less:
+		return "<"
+	case LessOrEqual:
+		return "<="
+	case Bigger:
+		return ">"
+	case BiggerOrEqual:
+		return ">="
+	case Or:
+		return "OR"
+	case And:
+		return "AND"
+	case LeftParen:
+		return "("
+	case RightParen:
+		return ")"
+	case EOF:
+		return "EOF"
+	}
+
+	return "invalid"
 }
 
 func (l *Lexer) Parse(input string) ([]Lexeme, error) {
@@ -104,17 +137,17 @@ func (l *Lexer) Parse(input string) ([]Lexeme, error) {
 		case '=':
 			flush()
 
-			lexeme.Type = Equal
+			lexeme.Type = l.operators["="]
 			lexeme.Literal = "="
 		case '(':
 			flush()
 
-			lexeme.Type = LeftBracket
+			lexeme.Type = LeftParen
 			lexeme.Literal = "("
 		case ')':
 			flush()
 
-			lexeme.Type = RightBracket
+			lexeme.Type = RightParen
 			lexeme.Literal = ")"
 		case '"', '\'':
 			flush()
