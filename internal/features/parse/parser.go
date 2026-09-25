@@ -4,6 +4,9 @@ import (
 	"fishyAHP/LogParser.git/internal/core/domain"
 	"fishyAHP/LogParser.git/internal/core/scheme"
 	"fishyAHP/LogParser.git/internal/features/tokenizer"
+
+	"fmt"
+	"strconv"
 )
 
 type LogParser struct {
@@ -28,31 +31,47 @@ func (p *LogParser) Parse(data []tokenizer.Token) (domain.LogEntry, error) {
 		Fields: make(map[string]string),
 	}
 
-	for i, field := range p.scheme.Parameters {
-		value := cleanToken[i]
+	if len(cleanToken) == len(p.scheme.Parameters) {
 
-		switch field.FieldType {
+		for i, field := range p.scheme.Parameters {
+			value := cleanToken[i]
 
-		case scheme.IntType:
-			_, err := strconv.Atoi(value)
-			if err != nil {
-				return domain.LogEntry{}, err
-			}
-			logEntry.Fields[field.Name] = value
+			switch field.FieldType {
 
-		case scheme.TimeType:
-			parsedTime, err := time.Parse(time.RFC3339, value)
-			if err != nil {
-				return domain.LogEntry{}, err
-			}
-			logEntry.Timestamp = parsedTime
-
-		case scheme.StringType:
-			if field.Name == "message" {
-				logEntry.Message = value
-			} else {
+			case scheme.IntType:
+				_, err := strconv.Atoi(value)
+				if err != nil {
+					return domain.LogEntry{}, err
+				}
 				logEntry.Fields[field.Name] = value
-			}
+
+			case scheme.TimeType:
+				parsedTime, err := time.Parse(time.RFC3339, value)
+				if err != nil {
+					return domain.LogEntry{}, err
+				}
+				logEntry.Timestamp = parsedTime
+
+				}
+			case scheme.BoolType:
+				_, err := strconv.ParseBool(value)
+				if err != nil {
+					return domain.LogEntry{}, err
+				}
+				logEntry.Fields[field.Name] = value
+
+			case scheme.FloatType:
+				_, err := strconv.ParseFloat(value)
+				if err != nil {
+					return domain.LogEntry{}, err
+				}
+				logEntry.Fields[field.Name] = value
+
+			case scheme.StringType:
+				if field.Name == "message" {
+					logEntry.Message = value
+				} else {
+					logEntry.Fields[field.Name] = value
 		}
 	}
 	return logEntry, nil
