@@ -92,9 +92,9 @@ func (t LexemeType) String() string {
 		return ")"
 	case EOF:
 		return "EOF"
+	default:
+		return "invalid"
 	}
-
-	return "invalid"
 }
 
 func (l *Lexer) Parse(input string) ([]Lexeme, error) {
