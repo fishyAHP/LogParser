@@ -31,7 +31,9 @@ func (p *LogParser) Parse(data []tokenizer.Token) (domain.LogEntry, error) {
 		Fields: make(map[string]string),
 	}
 
-	if len(cleanToken) == len(p.scheme.Parameters) {
+	if len(cleanToken) != len(p.scheme.Parameters) {
+		return domain.LogEntry{}, fmt.Errorf("Count of fields don`t match with schemе")
+	}
 
 		for i, field := range p.scheme.Parameters {
 			value := cleanToken[i]
@@ -41,39 +43,51 @@ func (p *LogParser) Parse(data []tokenizer.Token) (domain.LogEntry, error) {
 			case scheme.IntType:
 				_, err := strconv.Atoi(value)
 				if err != nil {
-					return domain.LogEntry{}, err
+					return domain.LogEntry{}, fmt.Errorf("parse int: %w", err)
 				}
-				logEntry.Fields[field.Name] = value
+				logEntry.Components[i] = Component {
+					Field: field,
+					Value: value,
+				}
 
 			case scheme.TimeType:
 				parsedTime, err := time.Parse(time.RFC3339, value)
 				if err != nil {
-					return domain.LogEntry{}, err
+					return domain.LogEntry{}, fmt.Errorf("parse time: %w", err)
 				}
-				logEntry.Timestamp = parsedTime
+				logEntry.Timestamp = append(logEntry.Timestamp, parsedTime)
 
-				}
 			case scheme.BoolType:
-				_, err := strconv.ParseBool(value)
-				if err != nil {
-					return domain.LogEntry{}, err
+				
+				if _, err := strconv.ParseBool(value); err != nil {
+					return domain.LogEntry{}, fmt.Errorf("parse bool: %w", err)
 				}
-				logEntry.Fields[field.Name] = value
+				logEntry.Components[i] = Component {
+					Field: field,
+					Value: value,
+				}
 
 			case scheme.FloatType:
-				_, err := strconv.ParseFloat(value)
+				_, err := strconv.ParseFloat(value, 64)
 				if err != nil {
-					return domain.LogEntry{}, err
+					return domain.LogEntry{}, fmt.Errorf("parse float: %w", err)
 				}
-				logEntry.Fields[field.Name] = value
+				logEntry.Components[i] = Component {
+					Field: field,
+					Value: value,
+				}
 
 			case scheme.StringType:
 				if field.Name == "message" {
 					logEntry.Message = value
 				} else {
-					logEntry.Fields[field.Name] = value
+					logEntry.Components[i] = Component {
+					Field: field,
+					Value: value,
+					}
+				}
+			}
 		}
-	}
 	return logEntry, nil
 }
 
