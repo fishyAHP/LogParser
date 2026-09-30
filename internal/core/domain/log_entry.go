@@ -4,37 +4,21 @@ import "time"
 
 // LogEntry логическое представление записи лога
 type LogEntry struct {
-	Timestamp time.Time
-	Level     LogLevel
-	Component LogComponent
-	PID       PID
-	IP        IP
-	Message   string
-	Other     map[string]string
+	Values []Value
 }
 
-type IP [4]uint8
-
-func (i IP) IsZero() bool {
-	var zeroCount int
-	for _, ip := range i {
-		if ip == 0 {
-			zeroCount++
-		}
-	}
-
-	return zeroCount == 4
+type Value interface {
+	isValue()
 }
 
-type PID = uint32
-type LogComponent = string
+type IntValue int64
+type FloatValue float64
+type StringValue string
+type BoolValue bool
+type TimeValue time.Time
 
-type LogLevel string
-
-const (
-	Debug LogLevel = "DEBUG"
-	Info  LogLevel = "INFO"
-	Warn  LogLevel = "WARN"
-	Error LogLevel = "ERROR"
-	Fatal LogLevel = "FATAL"
-)
+func (i IntValue) isValue()    {}
+func (f FloatValue) isValue()  {}
+func (s StringValue) isValue() {}
+func (b BoolValue) isValue()   {}
+func (t TimeValue) isValue()   {}

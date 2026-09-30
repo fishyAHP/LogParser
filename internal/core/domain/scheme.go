@@ -15,17 +15,11 @@ const (
 	BoolType
 	FloatType
 	TimeType
-	Array
-	Map
-	Object
 )
 
 type Field struct {
-	Name         string
-	FieldType    DataType
-	ObjectFields []Field
-	Elements     *Field
-	Map          *[2]Field
+	Name      string
+	FieldType DataType
 }
 
 type Scheme struct {
@@ -44,7 +38,7 @@ func (s *Scheme) Validate() error {
 
 	m := make(map[string]struct{})
 	for _, field := range s.Parameters {
-		if err := field.Validate(); err != nil {
+		if err := field.validate(); err != nil {
 			return fmt.Errorf("schema validate parameters: %w", err)
 		}
 
@@ -58,64 +52,19 @@ func (s *Scheme) Validate() error {
 	return nil
 }
 
-func (f *Field) Validate() error {
+func (f *Field) validate() error {
 	if strings.TrimSpace(f.Name) == "" {
 		return errors.New("name must be not void")
 	}
 
 	m := map[DataType]struct{}{
 		StringType: {}, IntType: {}, FloatType: {},
-		BoolType: {}, TimeType: {}, Object: {},
-		Array: {}, Map: {}, Invalid: {},
+		BoolType: {}, TimeType: {},
 	}
 
 	if _, ok := m[f.FieldType]; !ok {
 		return errors.New("field type must be in initialized types")
 	}
 
-	switch f.FieldType {
-	case Invalid:
-		return errors.New("field type must be not invalid")
-	case Object:
-		if len(f.ObjectFields) == 0 {
-			return errors.New("object fields must have more than zero")
-		}
-
-		if f.Elements != nil {
-			return errors.New("in object type elements must be nil")
-		}
-
-		for _, field := range f.ObjectFields {
-			if err := field.Validate(); err != nil {
-				return fmt.Errorf("validate field object type: %w", err)
-			}
-		}
-	case Array:
-		if len(f.ObjectFields) != 0 {
-			return errors.New("in slice length of object fields must be zero")
-		}
-		if f.Elements == nil {
-			return errors.New("in slice elements must be non nil")
-		}
-
-		if err := f.Elements.Validate(); err != nil {
-			return fmt.Errorf("validate field slice type: %w", err)
-		}
-	case Map:
-		if len(f.ObjectFields) != 0 {
-			return errors.New("in map length of object fields must be zero")
-		}
-		if f.Elements != nil {
-			return errors.New("in map elements must be nil")
-		}
-
-		for _, field := range f.Map {
-			if err := field.Validate(); err != nil {
-				return fmt.Errorf("validate field map type: %w", err)
-			}
-		}
-	default:
-		break
-	}
 	return nil
 }

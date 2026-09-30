@@ -38,47 +38,44 @@ func (p *LogParser) Parse(data []tokenizer.Token) (domain.LogEntry, error) {
 	}
 
 	logEntry := domain.LogEntry{
-		Other: make(map[string]string),
+		Values: make([]domain.Value, 0, len(cleanToken)),
 	}
 	for i, field := range p.scheme.Parameters {
 		value := cleanToken[i]
 
 		switch field.FieldType {
 		case domain.IntType:
-			_, err := strconv.Atoi(value)
+			intVal, err := strconv.ParseInt(value, 10, 64)
 			if err != nil {
 				return domain.LogEntry{}, err
 			}
-			logEntry.Other[field.Name] = value
+			logEntry.Values = append(logEntry.Values, domain.IntValue(intVal))
 
 		case domain.TimeType:
 			parsedTime, err := time.Parse(time.RFC3339, value)
 			if err != nil {
 				return domain.LogEntry{}, err
 			}
-			logEntry.Timestamp = parsedTime
+			logEntry.Values = append(logEntry.Values, domain.TimeValue(parsedTime))
 
 		case domain.BoolType:
-			_, err := strconv.ParseBool(value)
+			boolVal, err := strconv.ParseBool(value)
 			if err != nil {
 				return domain.LogEntry{}, err
 			}
-			logEntry.Other[field.Name] = value
+			logEntry.Values = append(logEntry.Values, domain.BoolValue(boolVal))
 
 		case domain.FloatType:
-			_, err := strconv.ParseFloat(value, 64)
+			floatVal, err := strconv.ParseFloat(value, 64)
 			if err != nil {
 				return domain.LogEntry{}, err
 			}
-			logEntry.Other[field.Name] = value
+			logEntry.Values = append(logEntry.Values, domain.FloatValue(floatVal))
 
 		case domain.StringType:
-			if field.Name == "message" {
-				logEntry.Message = value
-			} else {
-				logEntry.Other[field.Name] = value
-			}
+			logEntry.Values = append(logEntry.Values, domain.StringValue(value))
 		default:
+			return domain.LogEntry{}, fmt.Errorf("unknown type in scheme: %d", field.FieldType)
 		}
 	}
 	return logEntry, nil
