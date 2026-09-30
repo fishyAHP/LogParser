@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
-	"github.com/google/uuid"
 )
 
 type FileSize uint64
@@ -39,6 +38,8 @@ type segment struct {
 	size FileSize
 	file *os.File
 }
+
+var Records uint64 = 0
 
 // newSegment создает/открывает файл, дает ему номер/название,
 // если его не было.
@@ -92,12 +93,13 @@ func (s *segment) Write(data []byte) (*domain.RecordData, error) {
 			fmt.Errorf("write segment file: %w", err)
 	}
 
+	Records++
 	rd := domain.NewRecordData(
 		uint32(n),
 		s.ID,
 		uint64(s.size),
+		Records,
 		filepath.Dir(s.file.Name()),
-		uuid.New(),
 	)
 	s.size += FileSize(n)
 

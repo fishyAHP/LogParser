@@ -39,8 +39,9 @@ func (i *Index[K]) Add(key K, value domain.RecordData) {
 	if _, ok := i.idx[key]; !ok {
 		i.idx[key] = set.New[domain.RecordData](newSet(i.count))
 	}
-	i.idx[key].Add(value)
-	i.count++
+	if i.idx[key].Add(value) {
+		i.count++
+	}
 }
 
 func (i *Index[K]) Get(key K) (*set.Set[domain.RecordData], bool) {
@@ -85,5 +86,12 @@ func (i *Index[K]) Delete(key K, value domain.RecordData) bool {
 		return false
 	}
 
-	return s.Remove(value)
+	if s.Remove(value) {
+		i.count--
+		if s.Len() == 0 {
+			delete(i.idx, key)
+		}
+		return true
+	}
+	return false
 }
