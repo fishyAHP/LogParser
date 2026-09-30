@@ -1,4 +1,4 @@
-package scheme
+package domain
 
 import (
 	"errors"

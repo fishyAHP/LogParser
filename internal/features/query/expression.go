@@ -13,7 +13,7 @@ type BinaryExpr struct {
 type Condition struct {
 	Field    string
 	Operator CompareOperator
-	Value    string
+	Value    Lexeme
 }
 
 type LogicalOperator uint8

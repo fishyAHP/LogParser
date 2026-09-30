@@ -1,4 +1,4 @@
-package lexer
+package query
 
 import (
 	"errors"
@@ -15,15 +15,15 @@ type Lexer struct {
 func New() *Lexer {
 	return &Lexer{
 		keywords: map[string]LexemeType{
-			"and": And,
-			"or":  Or,
+			"and": AndType,
+			"or":  OrType,
 		},
 		operators: map[string]LexemeType{
-			"=":  Equal,
-			">":  Bigger,
-			">=": BiggerOrEqual,
-			"<":  Less,
-			"<=": LessOrEqual,
+			"=":  EqualType,
+			">":  BiggerType,
+			">=": BiggerOrEqualType,
+			"<":  LessType,
+			"<=": LessOrEqualType,
 		},
 	}
 }
@@ -40,17 +40,18 @@ const (
 	Identifier LexemeType = iota
 	String
 	Number
+	Bool
 
-	// Equal to LessOrEqual are operators
-	Equal
-	Bigger
-	BiggerOrEqual
-	Less
-	LessOrEqual
+	// EqualType to LessOrEqualType are operators
+	EqualType
+	BiggerType
+	BiggerOrEqualType
+	LessType
+	LessOrEqualType
 
-	// Or And keywords
-	Or
-	And
+	// OrType AndType keywords
+	OrType
+	AndType
 
 	// LeftParen and RightParen lexic string
 	LeftParen
@@ -67,24 +68,26 @@ var EOFLexeme = Lexeme{
 func (t LexemeType) String() string {
 	switch t {
 	case Identifier:
-		return "Identifier"
+		return "identifier"
 	case String:
-		return "String"
+		return "string"
 	case Number:
-		return "Number"
-	case Equal:
+		return "number"
+	case Bool:
+		return "bool"
+	case EqualType:
 		return "="
-	case Less:
+	case LessType:
 		return "<"
-	case LessOrEqual:
+	case LessOrEqualType:
 		return "<="
-	case Bigger:
+	case BiggerType:
 		return ">"
-	case BiggerOrEqual:
+	case BiggerOrEqualType:
 		return ">="
-	case Or:
+	case OrType:
 		return "OR"
-	case And:
+	case AndType:
 		return "AND"
 	case LeftParen:
 		return "("
@@ -190,8 +193,10 @@ func (l *Lexer) toLexeme(s string) Lexeme {
 	typ, ok := l.keywords[strings.ToLower(s)]
 	if ok {
 		lexeme.Type = typ
-	} else if _, err := strconv.Atoi(s); err != nil {
-		lexeme.Type = Identifier
+	} else if _, err := strconv.ParseFloat(s, 64); err == nil {
+		lexeme.Type = Number
+	} else if _, err := strconv.ParseBool(s); err == nil {
+		lexeme.Type = Bool
 	} else {
 		lexeme.Type = Number
 	}

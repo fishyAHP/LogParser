@@ -5,15 +5,14 @@ import (
 	"time"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
-	"fishyAHP/LogParser.git/internal/features/parse/scheme"
 	"fishyAHP/LogParser.git/internal/features/tokenizer"
 )
 
 type LogParser struct {
-	scheme scheme.Scheme
+	scheme domain.Scheme
 }
 
-func NewParser(s scheme.Scheme) LogParser {
+func NewParser(s domain.Scheme) LogParser {
 	return LogParser{
 		scheme: s,
 	}
@@ -35,21 +34,21 @@ func (p *LogParser) Parse(data []tokenizer.Token) (domain.LogEntry, error) {
 		value := cleanToken[i]
 
 		switch field.FieldType {
-		case scheme.IntType:
+		case domain.IntType:
 			_, err := strconv.Atoi(value)
 			if err != nil {
 				return domain.LogEntry{}, err
 			}
 			logEntry.Other[field.Name] = value
 
-		case scheme.TimeType:
+		case domain.TimeType:
 			parsedTime, err := time.Parse(time.RFC3339, value)
 			if err != nil {
 				return domain.LogEntry{}, err
 			}
 			logEntry.Timestamp = parsedTime
 
-		case scheme.StringType:
+		case domain.StringType:
 			if field.Name == "message" {
 				logEntry.Message = value
 			} else {
