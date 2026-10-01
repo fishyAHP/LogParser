@@ -7,107 +7,36 @@ import (
 
 	"fishyAHP/LogParser.git/internal/core/domain"
 	"fishyAHP/LogParser.git/internal/features/index/hash"
+	"fishyAHP/LogParser.git/internal/features/index/set"
 	"fishyAHP/LogParser.git/internal/features/index/text"
 	"fishyAHP/LogParser.git/internal/features/index/timestamp"
 )
 
 type stringHashIndex struct {
-	index Index[string]
+	index *hash.Index[string]
 }
 
 type intHashIndex struct {
-	index Index[int64]
+	index *hash.Index[int64]
 }
 
 type floatHashIndex struct {
-	index Index[float64]
+	index *hash.Index[float64]
 }
 
 type boolHashIndex struct {
-	index Index[bool]
+	index *hash.Index[bool]
 }
 
 type timeRangeIndex struct {
-	index RangeIndex[time.Time]
+	index *timestamp.Index
 }
 
 type textIndex struct {
-	index TextIndex
+	index *text.Index
 }
 
-var (
-	_ fieldIndex = (*stringHashIndex)(nil)
-	_ fieldIndex = (*intHashIndex)(nil)
-	_ fieldIndex = (*floatHashIndex)(nil)
-	_ fieldIndex = (*boolHashIndex)(nil)
-	_ fieldIndex = (*timeRangeIndex)(nil)
-	_ fieldIndex = (*textIndex)(nil)
-)
-
-func (s *stringHashIndex) Add(
-	value domain.Value,
-	record domain.RecordData,
-) error {
-	strVal, ok := value.(domain.StringValue)
-	if !ok {
-		return errors.New("invalid type for string hash index")
-	}
-
-	s.index.Add(string(strVal), record)
-	return nil
-}
-
-func (i *intHashIndex) Add(value domain.Value, record domain.RecordData) error {
-	intVal, ok := value.(domain.IntValue)
-	if !ok {
-		return errors.New("invalid type for int hash index")
-	}
-
-	i.index.Add(int64(intVal), record)
-	return nil
-}
-
-func (f *floatHashIndex) Add(value domain.Value, record domain.RecordData) error {
-	floatVal, ok := value.(domain.FloatValue)
-	if !ok {
-		return errors.New("invalid type for float hash index")
-	}
-
-	f.index.Add(float64(floatVal), record)
-	return nil
-}
-
-func (b *boolHashIndex) Add(value domain.Value, record domain.RecordData) error {
-	boolVal, ok := value.(domain.BoolValue)
-	if !ok {
-		return errors.New("invalid type for bool hash index")
-	}
-
-	b.index.Add(bool(boolVal), record)
-	return nil
-}
-
-func (t *timeRangeIndex) Add(value domain.Value, record domain.RecordData) error {
-	timeVal, ok := value.(domain.TimeValue)
-	if !ok {
-		return errors.New("invalid type for bool hash index")
-	}
-
-	t.index.Add(time.Time(timeVal), record)
-	return nil
-}
-
-func (t *textIndex) Add(value domain.Value, record domain.RecordData) error {
-	textVal, ok := value.(domain.StringValue)
-	if !ok {
-		return errors.New("invalid type for text index")
-	}
-
-	t.index.Add(string(textVal), record)
-	return nil
-}
-
-func newHashIndex(field domain.Field) (fieldIndex, error) {
+func newHashIndex(field domain.Field) (FieldIndex, error) {
 	switch field.FieldType {
 	case domain.StringType:
 		return &stringHashIndex{
@@ -133,7 +62,7 @@ func newHashIndex(field domain.Field) (fieldIndex, error) {
 	}
 }
 
-func newRangeIndex(field domain.Field) (fieldIndex, error) {
+func newRangeIndex(field domain.Field) (FieldIndex, error) {
 	switch field.FieldType {
 	case domain.IntType:
 		return &intHashIndex{
@@ -155,7 +84,7 @@ func newRangeIndex(field domain.Field) (fieldIndex, error) {
 	}
 }
 
-func newTextIndex(field domain.Field) (fieldIndex, error) {
+func newTextIndex(field domain.Field) (FieldIndex, error) {
 	switch field.FieldType {
 	case domain.StringType:
 		return &textIndex{
@@ -166,4 +95,181 @@ func newTextIndex(field domain.Field) (fieldIndex, error) {
 			"text index doesn't support %v type",
 			field.FieldType)
 	}
+}
+
+var (
+	_ FieldIndex = (*stringHashIndex)(nil)
+	_ FieldIndex = (*intHashIndex)(nil)
+	_ FieldIndex = (*floatHashIndex)(nil)
+	_ FieldIndex = (*boolHashIndex)(nil)
+	_ FieldIndex = (*timeRangeIndex)(nil)
+	_ FieldIndex = (*textIndex)(nil)
+	_ ExactIndex = (*stringHashIndex)(nil)
+	_ ExactIndex = (*intHashIndex)(nil)
+	_ ExactIndex = (*floatHashIndex)(nil)
+	_ ExactIndex = (*boolHashIndex)(nil)
+	_ ExactIndex = (*timeRangeIndex)(nil)
+	_ ExactIndex = (*textIndex)(nil)
+	_ RangeIndex = (*timeRangeIndex)(nil)
+)
+
+func (sh *stringHashIndex) Add(
+	value domain.Value,
+	record domain.RecordData,
+) error {
+	strVal, ok := value.(domain.StringValue)
+	if !ok {
+		return errors.New("invalid type for string hash index")
+	}
+
+	sh.index.Add(string(strVal), record)
+	return nil
+}
+
+func (ih *intHashIndex) Add(value domain.Value, record domain.RecordData) error {
+	intVal, ok := value.(domain.IntValue)
+	if !ok {
+		return errors.New("invalid type for int hash index")
+	}
+
+	ih.index.Add(int64(intVal), record)
+	return nil
+}
+
+func (fh *floatHashIndex) Add(value domain.Value, record domain.RecordData) error {
+	floatVal, ok := value.(domain.FloatValue)
+	if !ok {
+		return errors.New("invalid type for float hash index")
+	}
+
+	fh.index.Add(float64(floatVal), record)
+	return nil
+}
+
+func (bh *boolHashIndex) Add(value domain.Value, record domain.RecordData) error {
+	boolVal, ok := value.(domain.BoolValue)
+	if !ok {
+		return errors.New("invalid type for bool hash index")
+	}
+
+	bh.index.Add(bool(boolVal), record)
+	return nil
+}
+
+func (tr *timeRangeIndex) Add(value domain.Value, record domain.RecordData) error {
+	timeVal, ok := value.(domain.TimeValue)
+	if !ok {
+		return errors.New("invalid type for bool hash index")
+	}
+
+	tr.index.Add(time.Time(timeVal), record)
+	return nil
+}
+
+func (ti *textIndex) Add(value domain.Value, record domain.RecordData) error {
+	textVal, ok := value.(domain.StringValue)
+	if !ok {
+		return errors.New("invalid type for text index")
+	}
+
+	ti.index.Add(string(textVal), record)
+	return nil
+}
+
+func (sh *stringHashIndex) Exact(
+	value domain.Value,
+) (*set.Set[domain.RecordData], error) {
+	strVal, ok := value.(domain.StringValue)
+	if !ok {
+		return nil, errors.New("invalid type for string hash index")
+	}
+
+	res, _ := sh.index.Get(string(strVal))
+	return res, nil
+}
+
+func (fh *floatHashIndex) Exact(
+	value domain.Value,
+) (*set.Set[domain.RecordData], error) {
+	floatVal, ok := value.(domain.FloatValue)
+	if !ok {
+		return nil, errors.New("invalid type for float hash index")
+	}
+
+	res, _ := fh.index.Get(float64(floatVal))
+	return res, nil
+}
+
+func (bh *boolHashIndex) Exact(
+	value domain.Value,
+) (*set.Set[domain.RecordData], error) {
+	boolVal, ok := value.(domain.BoolValue)
+	if !ok {
+		return nil, errors.New("invalid type for bool hash index")
+	}
+
+	res, _ := bh.index.Get(bool(boolVal))
+	return res, nil
+}
+
+func (ih *intHashIndex) Exact(
+	value domain.Value,
+) (*set.Set[domain.RecordData], error) {
+	intVal, ok := value.(domain.IntValue)
+	if !ok {
+		return nil, errors.New("invalid type for int hash index")
+	}
+
+	res, _ := ih.index.Get(int64(intVal))
+	return res, nil
+}
+
+func (tr *timeRangeIndex) Exact(
+	value domain.Value,
+) (*set.Set[domain.RecordData], error) {
+	timeVal, ok := value.(domain.TimeValue)
+	if !ok {
+		return nil, errors.New("invalid type for string hash index")
+	}
+
+	res, _ := tr.index.Get(time.Time(timeVal))
+	return res, nil
+}
+
+func (ti *textIndex) Exact(
+	value domain.Value,
+) (*set.Set[domain.RecordData], error) {
+	strVal, ok := value.(domain.StringValue)
+	if !ok {
+		return nil, errors.New("invalid type for string hash index")
+	}
+
+	return ti.index.Get(string(strVal)), nil
+}
+
+func (tr *timeRangeIndex) Range(
+	from, to domain.Value,
+) (*set.Set[domain.RecordData], error) {
+	fromTime, ok := from.(domain.TimeValue)
+	if !ok {
+		return nil, errors.New("invalid type for time range index")
+	}
+	toTime, ok := to.(domain.TimeValue)
+	if !ok {
+		return nil, errors.New("invalid type for time range index")
+	}
+
+	res, _ := tr.index.Range(
+		time.Time(fromTime),
+		time.Time(toTime),
+	)
+	return res, nil
+}
+
+func (tr *timeRangeIndex) Min() *set.Set[domain.RecordData] {
+	return tr.index.Min()
+}
+
+func (tr *timeRangeIndex) Max() *set.Set[domain.RecordData] {
+	return tr.index.Max()
 }
