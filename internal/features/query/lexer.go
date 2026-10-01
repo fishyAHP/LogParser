@@ -195,10 +195,10 @@ func (l *Lexer) toLexeme(s string) Lexeme {
 		lexeme.Type = typ
 	} else if _, err := strconv.ParseFloat(s, 64); err == nil {
 		lexeme.Type = Number
-	} else if _, err := strconv.ParseBool(s); err == nil {
+	} else if _, err = strconv.ParseBool(s); err == nil {
 		lexeme.Type = Bool
 	} else {
-		lexeme.Type = Number
+		lexeme.Type = String
 	}
 
 	lexeme.Literal = s

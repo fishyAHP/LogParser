@@ -24,7 +24,7 @@ func NewSemanticAnalyzer(scheme *domain.Scheme) *SemanticAnalyzer {
 		possibleOps: map[domain.DataType][]CompareOperator{
 			domain.StringType: equalable, domain.BoolType: equalable,
 			domain.IntType: rangable, domain.FloatType: rangable,
-			domain.TimeType: rangable, domain.Array: equalable,
+			domain.TimeType: rangable,
 		},
 	}
 }
