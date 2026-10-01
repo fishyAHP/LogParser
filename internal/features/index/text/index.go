@@ -1,10 +1,10 @@
 package text
 
 import (
-	"errors"
 	"slices"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
+	"fishyAHP/LogParser.git/internal/features/index/common"
 	"fishyAHP/LogParser.git/internal/features/index/set"
 	"fishyAHP/LogParser.git/internal/features/index/text/words"
 )
@@ -14,22 +14,32 @@ type Index struct {
 	invert    invertIndex
 	Tokenizer *words.Tokenizer
 }
+type invertIndex = map[words.Token]*set.Set[domain.RecordData]
 
-var ErrInvalidType = errors.New("invalid type type")
+func New() *Index {
+	return &Index{
+		invert:    make(invertIndex),
+		Tokenizer: words.NewDefault(),
+	}
+}
 
-func (i *Index) Exact(value domain.Value) (*set.Set[domain.RecordData], error) {
+func (i *Index) Search(value domain.Value) (*set.Set[domain.RecordData], error) {
 	strVal, ok := value.(domain.StringValue)
 	if !ok {
-		return nil, ErrInvalidType
+		return nil, common.ErrInvalidType
 	}
 
-	return i.get(string(strVal)), nil
+	res := i.get(string(strVal))
+	if res == nil {
+		return nil, common.ErrNotFoundRecord
+	}
+	return res, nil
 }
 
 func (i *Index) Add(value domain.Value, record domain.RecordData) error {
 	strVal, ok := value.(domain.StringValue)
 	if !ok {
-		return ErrInvalidType
+		return common.ErrInvalidType
 	}
 
 	tokens := i.Tokenizer.Tokenize(string(strVal))
@@ -48,15 +58,6 @@ func (i *Index) Add(value domain.Value, record domain.RecordData) error {
 	}
 
 	return nil
-}
-
-type invertIndex = map[words.Token]*set.Set[domain.RecordData]
-
-func New() *Index {
-	return &Index{
-		invert:    make(invertIndex),
-		Tokenizer: words.NewDefault(),
-	}
 }
 
 func (i *Index) get(s string) *set.Set[domain.RecordData] {
@@ -99,44 +100,35 @@ func (i *Index) get(s string) *set.Set[domain.RecordData] {
 	return res
 }
 
-func (i *Index) RemoveTokens(s string) bool {
-	tokens := i.Tokenizer.Tokenize(s)
+func (i *Index) Remove(
+	s domain.Value,
+	data domain.RecordData) error {
+	keys, ok := s.(domain.StringValue)
+	if !ok {
+		return common.ErrInvalidType
+	}
+	tokens := i.Tokenizer.Tokenize(string(keys))
 
 	var isChanged bool
 	for _, token := range tokens {
-		if _, ok := i.invert[token]; ok {
+		if posting, ok := i.invert[token]; ok {
 			if !isChanged {
 				isChanged = true
 			}
-			i.count -= i.invert[token].Len()
-			delete(i.invert, token)
-		}
-	}
 
-	return isChanged
-}
-
-func (i *Index) RemoveRecord(s string, data domain.RecordData) bool {
-	tokens := i.Tokenizer.Tokenize(s)
-
-	var isDeleted bool
-	for _, token := range tokens {
-		if sett, ok := i.invert[token]; ok {
-			if sett.Remove(data) {
+			if posting.Remove(data) {
 				i.count--
-
-				if !isDeleted {
-					isDeleted = true
-				}
 			}
-
-			if sett.Len() == 0 {
+			if posting.Len() == 0 {
 				delete(i.invert, token)
 			}
 		}
 	}
 
-	return isDeleted
+	if !isChanged {
+		return common.ErrNotFoundRecord
+	}
+	return nil
 }
 
 func (i *Index) Len() int {
@@ -144,6 +136,6 @@ func (i *Index) Len() int {
 }
 
 func (i *Index) Clear() {
-	i.invert = make(map[words.Token]*set.Set[domain.RecordData])
+	i.invert = make(invertIndex)
 	i.count = 0
 }

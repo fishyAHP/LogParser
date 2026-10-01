@@ -5,19 +5,25 @@ import (
 	"fmt"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
+	"fishyAHP/LogParser.git/internal/features/index/common"
 	"fishyAHP/LogParser.git/internal/features/index/set"
 )
 
-type Service struct {
-	scheme domain.Scheme
+var (
+	ErrIndexNotFound       = errors.New("index wasn't found")
+	ErrUnsupportedOperator = errors.New("unsupported operator")
+	ErrUnknownIndexType    = errors.New("unknown index type in field")
+)
 
-	indexes map[string]Index
+type Service struct {
+	scheme  domain.Scheme
+	indexes map[string]common.Index
 }
 
 func New(scheme domain.Scheme) (*Service, error) {
 	service := &Service{
 		scheme:  scheme,
-		indexes: make(map[string]Index, len(scheme.Parameters)),
+		indexes: make(map[string]common.Index, len(scheme.Parameters)),
 	}
 
 	for _, field := range scheme.Parameters {
@@ -34,9 +40,7 @@ func New(scheme domain.Scheme) (*Service, error) {
 	return service, nil
 }
 
-var ErrUnknownIndexType = errors.New("unknown index type in field")
-
-func newFieldIndex(field domain.Field) (Index, error) {
+func newFieldIndex(field domain.Field) (common.Index, error) {
 	switch field.IndexType {
 	case domain.NoIndex:
 		return nil, nil
@@ -51,7 +55,10 @@ func newFieldIndex(field domain.Field) (Index, error) {
 	}
 }
 
-func (s *Service) Index(record domain.RecordData, entry domain.LogEntry) error {
+func (s *Service) Index(
+	record domain.RecordData,
+	entry domain.LogEntry,
+) error {
 	if len(entry.Values) != len(s.scheme.Parameters) {
 		return fmt.Errorf(
 			"entry values count doesn't match scheme: got %d, want %d",
@@ -75,11 +82,6 @@ func (s *Service) Index(record domain.RecordData, entry domain.LogEntry) error {
 	return nil
 }
 
-var (
-	ErrIndexNotFound       = errors.New("index wasn't found")
-	ErrUnsupportedOperator = errors.New("unsupported operator")
-)
-
 func (s *Service) Exact(
 	fieldName string,
 	value domain.Value,
@@ -89,21 +91,44 @@ func (s *Service) Exact(
 		return nil, ErrIndexNotFound
 	}
 
-	return idx.Exact(value)
+	exact, ok := idx.(common.ExactIndex)
+	if !ok {
+		return nil, fmt.Errorf(
+			"%w: want ExactIndex, got %T",
+			ErrUnsupportedOperator,
+			idx,
+		)
+	}
+
+	res, err := exact.Exact(value)
+	if err != nil {
+		return nil, fmt.Errorf("index exact: %w", err)
+	}
+	return res, nil
 }
 
 func (s *Service) Range(
 	fieldName string,
-	from, to domain.Value,
+	from, to *common.Bound,
 ) (*set.Set[domain.RecordData], error) {
 	idx, ok := s.indexes[fieldName]
 	if !ok {
 		return nil, ErrIndexNotFound
 	}
 
-	rangeIdx, ok := idx.(RangeIndex)
+	rangeIdx, ok := idx.(common.RangeIndex)
 	if !ok {
-		return nil, ErrUnsupportedOperator
+		return nil, fmt.Errorf(
+			"%w: want RangeIndex, got %T",
+			ErrUnsupportedOperator,
+			idx,
+		)
 	}
 	return rangeIdx.Range(from, to)
+}
+
+func (s *Service) Clear() {
+	for _, idx := range s.indexes {
+		idx.Clear()
+	}
 }

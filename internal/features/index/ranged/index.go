@@ -1,36 +1,53 @@
 package ranged
 
 import (
-	"errors"
-
 	"fishyAHP/LogParser.git/internal/core/domain"
 	"fishyAHP/LogParser.git/internal/features/index/set"
+
+	"fishyAHP/LogParser.git/internal/features/index/common"
 )
 
-type Key interface {
-	domain.Value
-	comparable
-}
-
-type Index[K Key] struct {
+type Index[K common.Key] struct {
 	tree *rbTree[K]
 }
 
-var ErrInvalidType = errors.New("invalid type type")
+type localBound[K common.Key] struct {
+	value     K
+	exclusive bool
+}
 
-func (i *Index[K]) Range(from, to domain.Value) (*set.Set[domain.RecordData], error) {
-	fromVal, ok := from.(K)
-	if !ok {
-		return nil, ErrInvalidType
+func (i *Index[K]) Range(
+	from, to *common.Bound,
+) (*set.Set[domain.RecordData], error) {
+	var (
+		fromBound *localBound[K]
+		toBound   *localBound[K]
+	)
+	if from != nil {
+		fromVal, ok := from.Value.(K)
+		if !ok {
+			return nil, common.ErrInvalidType
+		}
+		fromBound = &localBound[K]{
+			value:     fromVal,
+			exclusive: from.Exclusive,
+		}
+
 	}
-	toVal, ok := to.(K)
-	if !ok {
-		return nil, ErrInvalidType
+	if to != nil {
+		toVal, ok := to.Value.(K)
+		if !ok {
+			return nil, common.ErrInvalidType
+		}
+		toBound = &localBound[K]{
+			value:     toVal,
+			exclusive: to.Exclusive,
+		}
 	}
 
-	records, ok := i.tree.Range(fromVal, toVal)
+	records, ok := i.tree.Range(fromBound, toBound)
 	if !ok {
-		return nil, nil
+		return nil, common.ErrNotFoundRecord
 	}
 
 	s := set.New[domain.RecordData](len(records))
@@ -39,31 +56,52 @@ func (i *Index[K]) Range(from, to domain.Value) (*set.Set[domain.RecordData], er
 	return s, nil
 }
 
-func (i *Index[K]) Exact(value domain.Value) (*set.Set[domain.RecordData], error) {
+func (i *Index[K]) Exact(
+	value domain.Value,
+) (*set.Set[domain.RecordData], error) {
 	key, ok := value.(K)
 	if !ok {
-		return nil, ErrInvalidType
+		return nil, common.ErrInvalidType
 	}
-	res, _ := i.tree.Find(key)
+
+	res, ok := i.tree.Find(key)
+	if !ok {
+		return nil, common.ErrNotFoundRecord
+	}
 	return res, nil
 }
 
-func (i *Index[K]) Add(value domain.Value, record domain.RecordData) error {
+func (i *Index[K]) Add(
+	value domain.Value,
+	record domain.RecordData,
+) error {
 	key, ok := value.(K)
 	if !ok {
-		return ErrInvalidType
+		return common.ErrInvalidType
 	}
 	return i.tree.Insert(key, record)
 }
 
-func New[K Key](comparator func(K, K) int) *Index[K] {
+func New[K common.Key](comparator func(K, K) int) *Index[K] {
 	return &Index[K]{
 		tree: newRBTree(comparator),
 	}
 }
 
-func (i *Index[K]) Remove(key K) bool {
-	return i.tree.Remove(key)
+func (i *Index[K]) Remove(
+	value domain.Value,
+	data domain.RecordData,
+) error {
+	key, ok := value.(K)
+	if !ok {
+		return common.ErrInvalidType
+	}
+
+	deleted := i.tree.Remove(key, data)
+	if !deleted {
+		return common.ErrNotFoundRecord
+	}
+	return nil
 }
 
 func (i *Index[K]) Min() *set.Set[domain.RecordData] {
@@ -94,10 +132,6 @@ func (i *Index[K]) Max() *set.Set[domain.RecordData] {
 
 func (i *Index[K]) Len() int {
 	return i.tree.elemsCount
-}
-
-func (i *Index[K]) Delete(key K, value domain.RecordData) bool {
-	return i.tree.Delete(key, value)
 }
 
 func (i *Index[K]) Clear() {

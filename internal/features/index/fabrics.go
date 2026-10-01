@@ -6,12 +6,26 @@ import (
 	"time"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
+	"fishyAHP/LogParser.git/internal/features/index/common"
 	"fishyAHP/LogParser.git/internal/features/index/hash"
 	"fishyAHP/LogParser.git/internal/features/index/ranged"
 	"fishyAHP/LogParser.git/internal/features/index/text"
 )
 
-func newHashIndex(field domain.Field) (Index, error) {
+var (
+	_ common.ExactIndex = (*hash.Index[domain.StringValue])(nil)
+	_ common.ExactIndex = (*hash.Index[domain.BoolValue])(nil)
+	_ common.ExactIndex = (*hash.Index[domain.IntValue])(nil)
+	_ common.ExactIndex = (*hash.Index[domain.FloatValue])(nil)
+
+	_ common.TextIndex = (*text.Index)(nil)
+
+	_ common.RangeIndex = (*ranged.Index[domain.IntValue])(nil)
+	_ common.RangeIndex = (*ranged.Index[domain.FloatValue])(nil)
+	_ common.RangeIndex = (*ranged.Index[domain.TimeValue])(nil)
+)
+
+func newHashIndex(field domain.Field) (common.Index, error) {
 	switch field.FieldType {
 	case domain.StringType:
 		return hash.New[domain.StringValue](), nil
@@ -29,7 +43,7 @@ func newHashIndex(field domain.Field) (Index, error) {
 	}
 }
 
-func newRangeIndex(field domain.Field) (Index, error) {
+func newRangeIndex(field domain.Field) (common.Index, error) {
 	switch field.FieldType {
 	case domain.IntType:
 		return ranged.New[domain.IntValue](
@@ -62,7 +76,7 @@ func newRangeIndex(field domain.Field) (Index, error) {
 	}
 }
 
-func newTextIndex(field domain.Field) (Index, error) {
+func newTextIndex(field domain.Field) (common.Index, error) {
 	switch field.FieldType {
 	case domain.StringType:
 		return text.New(), nil

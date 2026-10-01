@@ -5,10 +5,11 @@ import (
 	"math"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
+	"fishyAHP/LogParser.git/internal/features/index/common"
 	"fishyAHP/LogParser.git/internal/features/index/set"
 )
 
-type rbTree[K comparable] struct {
+type rbTree[K common.Key] struct {
 	root *node[K]
 
 	// t.compare returns
@@ -22,7 +23,7 @@ type rbTree[K comparable] struct {
 	nodesCount int
 }
 
-func newRBTree[K comparable](comparator func(K, K) int) *rbTree[K] {
+func newRBTree[K common.Key](comparator func(K, K) int) *rbTree[K] {
 	return &rbTree[K]{
 		compare: comparator,
 	}
@@ -213,13 +214,8 @@ func (t *rbTree[K]) Find(key K) (*set.Set[domain.RecordData], bool) {
 	return nil, false
 }
 
-func (t *rbTree[K]) Range(from, to K) ([]domain.RecordData, bool) {
-	if t.compare(from, to) == 1 {
-		return nil, false
-	}
-
+func (t *rbTree[K]) Range(from, to *localBound[K]) ([]domain.RecordData, bool) {
 	result := make([]domain.RecordData, 0)
-
 	result = t.rangeSearch(t.root, from, to, result)
 
 	if len(result) == 0 {
@@ -230,27 +226,52 @@ func (t *rbTree[K]) Range(from, to K) ([]domain.RecordData, bool) {
 
 func (t *rbTree[K]) rangeSearch(
 	n *node[K],
-	from, to K,
+	from, to *localBound[K],
 	res []domain.RecordData,
 ) []domain.RecordData {
 	if n == nil {
 		return res
 	}
 
-	if t.compare(n.key, from) == 1 {
+	if from == nil || t.compare(n.key, from.value) > 0 {
 		res = t.rangeSearch(n.left, from, to, res)
 	}
 
-	if t.compare(n.key, from) > -1 &&
-		t.compare(n.key, to) < 1 {
+	if t.inBoundPeriod(n, from, to) {
 		res = append(res, n.records.Slice()...)
 	}
 
-	if t.compare(n.key, to) == -1 {
+	if to == nil || t.compare(n.key, to.value) < 0 {
 		res = t.rangeSearch(n.right, from, to, res)
 	}
 
 	return res
+}
+
+func (t *rbTree[K]) inBoundPeriod(n *node[K], left, right *localBound[K]) bool {
+	inLeft := true
+	if left != nil {
+		cmp := t.compare(n.key, left.value)
+
+		if left.exclusive {
+			inLeft = cmp > 0
+		} else {
+			inLeft = cmp >= 0
+		}
+	}
+
+	inRight := true
+	if right != nil {
+		cmp := t.compare(n.key, right.value)
+
+		if right.exclusive {
+			inRight = cmp < 0
+		} else {
+			inRight = cmp <= 0
+		}
+	}
+
+	return inLeft && inRight
 }
 
 func (t *rbTree[K]) Len() int {
@@ -291,10 +312,6 @@ func (t *rbTree[K]) Clear() {
 	t.nodesCount = 0
 }
 
-func (t *rbTree[K]) Remove(key K) bool {
-	return false
-}
-
-func (t *rbTree[K]) Delete(key K, value domain.RecordData) bool {
+func (t *rbTree[K]) Remove(key K, value domain.RecordData) bool {
 	return false
 }
