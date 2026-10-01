@@ -15,7 +15,7 @@ func NewScanner(input string) Scanner {
 	}
 }
 
-func (s *Scanner) peek() (rune, bool) {
+func (s *Scanner) Peek() (rune, bool) {
 	if s.curPosition >= 0 &&
 		s.curPosition < len(s.input) {
 		return s.input[s.curPosition], true
@@ -27,7 +27,7 @@ func (s *Scanner) peek() (rune, bool) {
 
 var EOF = errors.New("end of file")
 
-func (s *Scanner) advance() error {
+func (s *Scanner) Advance() error {
 	if s.curPosition >= len(s.input) {
 		return EOF
 	}
@@ -36,7 +36,7 @@ func (s *Scanner) advance() error {
 	return nil
 }
 
-func (s *Scanner) getValue() string {
+func (s *Scanner) GetValue() string {
 	value := string(s.input[s.lastPosition+1 : s.curPosition])
 	s.lastPosition = s.curPosition
 

@@ -1,6 +1,7 @@
 package hash
 
 import (
+	"errors"
 	"math"
 	"sync"
 
@@ -8,21 +9,61 @@ import (
 	"fishyAHP/LogParser.git/internal/features/index/set"
 )
 
-type Index[K comparable] struct {
+type Key interface {
+	domain.Value
+	comparable
+}
+
+type Index[K Key] struct {
 	count int
 	idx   map[K]*set.Set[domain.RecordData]
 	mtx   sync.RWMutex
 }
 
-var newSet = func(length int) int {
-	return int(math.Pow(float64(length), 0.5))
-}
-
-func New[K comparable]() *Index[K] {
+func New[K Key]() *Index[K] {
 	return &Index[K]{
 		idx: make(map[K]*set.Set[domain.RecordData]),
 		mtx: sync.RWMutex{},
 	}
+}
+
+var ErrInvalidType = errors.New("invalid type type")
+
+func (i *Index[K]) Exact(value domain.Value) (*set.Set[domain.RecordData], error) {
+	i.mtx.RLock()
+	defer i.mtx.RUnlock()
+
+	newVal, ok := value.(K)
+	if !ok {
+		return nil, ErrInvalidType
+	}
+	s, ok := i.idx[newVal]
+	if !ok {
+		return nil, nil
+	}
+
+	return s, nil
+}
+
+func (i *Index[K]) Add(value domain.Value, record domain.RecordData) error {
+	i.mtx.Lock()
+	defer i.mtx.Unlock()
+
+	newVal, ok := value.(K)
+	if !ok {
+		return ErrInvalidType
+	}
+	if _, ok := i.idx[newVal]; !ok {
+		i.idx[newVal] = set.New[domain.RecordData](newSet(i.count))
+	}
+	if i.idx[newVal].Add(record) {
+		i.count++
+	}
+	return nil
+}
+
+var newSet = func(length int) int {
+	return int(math.Pow(float64(length), 0.5))
 }
 
 func (i *Index[K]) Len() int {
@@ -30,32 +71,6 @@ func (i *Index[K]) Len() int {
 	defer i.mtx.RUnlock()
 
 	return i.count
-}
-
-func (i *Index[K]) Add(key K, value domain.RecordData) bool {
-	i.mtx.Lock()
-	defer i.mtx.Unlock()
-
-	if _, ok := i.idx[key]; !ok {
-		i.idx[key] = set.New[domain.RecordData](newSet(i.count))
-	}
-	if i.idx[key].Add(value) {
-		i.count++
-		return true
-	}
-	return false
-}
-
-func (i *Index[K]) Get(key K) (*set.Set[domain.RecordData], bool) {
-	i.mtx.RLock()
-	defer i.mtx.RUnlock()
-
-	s, ok := i.idx[key]
-	if !ok {
-		return nil, false
-	}
-
-	return s, true
 }
 
 func (i *Index[K]) Remove(key K) bool {

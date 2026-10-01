@@ -11,13 +11,13 @@ import (
 type Service struct {
 	scheme domain.Scheme
 
-	indexes map[string]FieldIndex
+	indexes map[string]Index
 }
 
 func New(scheme domain.Scheme) (*Service, error) {
 	service := &Service{
 		scheme:  scheme,
-		indexes: make(map[string]FieldIndex, len(scheme.Parameters)),
+		indexes: make(map[string]Index, len(scheme.Parameters)),
 	}
 
 	for _, field := range scheme.Parameters {
@@ -26,7 +26,9 @@ func New(scheme domain.Scheme) (*Service, error) {
 			return nil, fmt.Errorf("new field index: %w", err)
 		}
 
-		service.indexes[field.Name] = idx
+		if idx != nil {
+			service.indexes[field.Name] = idx
+		}
 	}
 
 	return service, nil
@@ -34,7 +36,7 @@ func New(scheme domain.Scheme) (*Service, error) {
 
 var ErrUnknownIndexType = errors.New("unknown index type in field")
 
-func newFieldIndex(field domain.Field) (FieldIndex, error) {
+func newFieldIndex(field domain.Field) (Index, error) {
 	switch field.IndexType {
 	case domain.NoIndex:
 		return nil, nil
@@ -62,8 +64,7 @@ func (s *Service) Index(record domain.RecordData, entry domain.LogEntry) error {
 		field := s.scheme.Parameters[i]
 
 		if idx, ok := s.indexes[field.Name]; ok {
-			err := idx.Add(value, record)
-			if err != nil {
+			if err := idx.Add(value, record); err != nil {
 				return fmt.Errorf("index field %s: %w",
 					field.Name,
 					err,
@@ -88,11 +89,7 @@ func (s *Service) Exact(
 		return nil, ErrIndexNotFound
 	}
 
-	exactIdx, ok := idx.(ExactIndex)
-	if !ok {
-		return nil, ErrUnsupportedOperator
-	}
-	return exactIdx.Exact(value)
+	return idx.Exact(value)
 }
 
 func (s *Service) Range(
@@ -108,6 +105,5 @@ func (s *Service) Range(
 	if !ok {
 		return nil, ErrUnsupportedOperator
 	}
-
 	return rangeIdx.Range(from, to)
 }

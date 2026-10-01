@@ -1,4 +1,4 @@
-package timestamp
+package ranged
 
 import (
 	"testing"

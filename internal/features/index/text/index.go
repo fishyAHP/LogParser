@@ -1,6 +1,7 @@
 package text
 
 import (
+	"errors"
 	"slices"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
@@ -14,6 +15,41 @@ type Index struct {
 	Tokenizer *words.Tokenizer
 }
 
+var ErrInvalidType = errors.New("invalid type type")
+
+func (i *Index) Exact(value domain.Value) (*set.Set[domain.RecordData], error) {
+	strVal, ok := value.(domain.StringValue)
+	if !ok {
+		return nil, ErrInvalidType
+	}
+
+	return i.get(string(strVal)), nil
+}
+
+func (i *Index) Add(value domain.Value, record domain.RecordData) error {
+	strVal, ok := value.(domain.StringValue)
+	if !ok {
+		return ErrInvalidType
+	}
+
+	tokens := i.Tokenizer.Tokenize(string(strVal))
+	sett := set.New[words.Token](len(tokens))
+	sett.AddMany(tokens...)
+	tokens = sett.Slice()
+
+	for _, token := range tokens {
+		if _, ok := i.invert[token]; !ok {
+			i.invert[token] = set.New[domain.RecordData](1)
+		}
+
+		if i.invert[token].Add(record) {
+			i.count++
+		}
+	}
+
+	return nil
+}
+
 type invertIndex = map[words.Token]*set.Set[domain.RecordData]
 
 func New() *Index {
@@ -23,28 +59,7 @@ func New() *Index {
 	}
 }
 
-func (i *Index) Add(s string, data domain.RecordData) bool {
-	tokens := i.Tokenizer.Tokenize(s)
-	sett := set.New[words.Token](len(tokens))
-	sett.AddMany(tokens...)
-	tokens = sett.Slice()
-
-	var isAdded bool
-	for _, token := range tokens {
-		if _, ok := i.invert[token]; !ok {
-			i.invert[token] = set.New[domain.RecordData](1)
-		}
-
-		if i.invert[token].Add(data) {
-			i.count++
-			isAdded = true
-		}
-	}
-
-	return isAdded
-}
-
-func (i *Index) Get(s string) *set.Set[domain.RecordData] {
+func (i *Index) get(s string) *set.Set[domain.RecordData] {
 	tokens := i.Tokenizer.Tokenize(s)
 	sets := make([]*set.Set[domain.RecordData], 0, len(tokens))
 

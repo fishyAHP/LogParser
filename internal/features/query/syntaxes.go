@@ -123,7 +123,7 @@ func (q *Syntaxes) parseComparison(lexemes []Lexeme) (Expr, error) {
 	var cond Condition
 
 	if q.pos+2 >= len(lexemes) {
-		return nil, errors.New("index out of range")
+		return nil, errors.New("index out of ranged")
 	}
 
 	field := lexemes[q.pos]
