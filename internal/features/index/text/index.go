@@ -23,12 +23,13 @@ func New() *Index {
 	}
 }
 
-func (i *Index) Add(s string, data domain.RecordData) {
+func (i *Index) Add(s string, data domain.RecordData) bool {
 	tokens := i.Tokenizer.Tokenize(s)
 	sett := set.New[words.Token](len(tokens))
 	sett.AddMany(tokens...)
 	tokens = sett.Slice()
 
+	var isAdded bool
 	for _, token := range tokens {
 		if _, ok := i.invert[token]; !ok {
 			i.invert[token] = set.New[domain.RecordData](1)
@@ -36,8 +37,11 @@ func (i *Index) Add(s string, data domain.RecordData) {
 
 		if i.invert[token].Add(data) {
 			i.count++
+			isAdded = true
 		}
 	}
+
+	return isAdded
 }
 
 func (i *Index) Get(s string) *set.Set[domain.RecordData] {

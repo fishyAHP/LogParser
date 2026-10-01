@@ -1,4 +1,4 @@
-package hash_index
+package hash
 
 import (
 	"math"
@@ -32,7 +32,7 @@ func (i *Index[K]) Len() int {
 	return i.count
 }
 
-func (i *Index[K]) Add(key K, value domain.RecordData) {
+func (i *Index[K]) Add(key K, value domain.RecordData) bool {
 	i.mtx.Lock()
 	defer i.mtx.Unlock()
 
@@ -41,7 +41,9 @@ func (i *Index[K]) Add(key K, value domain.RecordData) {
 	}
 	if i.idx[key].Add(value) {
 		i.count++
+		return true
 	}
+	return false
 }
 
 func (i *Index[K]) Get(key K) (*set.Set[domain.RecordData], bool) {

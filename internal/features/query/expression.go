@@ -26,11 +26,18 @@ const (
 type CompareOperator uint8
 
 const (
-	Equal CompareOperator = iota
+	Equal CompareOperator = 1 << iota
 	Bigger
 	BiggerOrEqual
 	Less
 	LessOrEqual
+)
+
+const (
+	EqualityOps = Equal
+	OrderedOps  = Equal | Bigger |
+		BiggerOrEqual | Less |
+		LessOrEqual
 )
 
 func (c CompareOperator) String() string {

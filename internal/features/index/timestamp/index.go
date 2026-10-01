@@ -67,10 +67,12 @@ func New(accuracy time.Duration) *Index {
 	}
 }
 
-func (i *Index) Add(key time.Time, value domain.RecordData) {
+func (i *Index) Add(key time.Time, value domain.RecordData) bool {
 	if err := i.tree.Insert(key, value); err != nil {
 		// залогируем fmt.Errorf("time index add: %w", err))
+		return false
 	}
+	return true
 }
 
 func (i *Index) Delete(key time.Time, value domain.RecordData) bool {

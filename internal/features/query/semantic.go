@@ -11,22 +11,28 @@ import (
 )
 
 type SemanticAnalyzer struct {
-	scheme      *domain.Scheme
-	possibleOps map[domain.DataType][]CompareOperator
+	scheme *domain.Scheme
 }
 
 func NewSemanticAnalyzer(scheme *domain.Scheme) *SemanticAnalyzer {
-	rangable := []CompareOperator{Equal, Less, LessOrEqual, Bigger, BiggerOrEqual}
-	equalable := []CompareOperator{Equal}
-
 	return &SemanticAnalyzer{
 		scheme: scheme,
-		possibleOps: map[domain.DataType][]CompareOperator{
-			domain.StringType: equalable, domain.BoolType: equalable,
-			domain.IntType: rangable, domain.FloatType: rangable,
-			domain.TimeType: rangable,
-		},
 	}
+}
+
+func allowedOperators(typ domain.DataType) CompareOperator {
+	switch typ {
+	case domain.StringType, domain.BoolType:
+		return EqualityOps
+	case domain.IntType, domain.FloatType, domain.TimeType:
+		return OrderedOps
+	default:
+		return 0
+	}
+}
+
+func isAllowed(allowed, op CompareOperator) bool {
+	return allowed&op != 0
 }
 
 func (s *SemanticAnalyzer) Analyze(expr Expr) error {
@@ -56,15 +62,14 @@ func (s *SemanticAnalyzer) Analyze(expr Expr) error {
 		}
 
 		field := s.scheme.Parameters[idx]
-		if ops, ok := s.possibleOps[field.FieldType]; !ok {
-			return fmt.Errorf("unknown type of field: %d", field.FieldType)
-		} else if !slices.ContainsFunc(ops, func(a CompareOperator) bool {
-			if a == e.Operator {
-				return true
-			}
-			return false
-		}) {
-			return fmt.Errorf("operator '%s' is not supported for field %q", e.Operator, e.Field)
+		if !isAllowed(
+			allowedOperators(field.FieldType),
+			e.Operator) {
+			return fmt.Errorf(
+				"operator %v is not supported for %v",
+				e.Operator,
+				field.FieldType,
+			)
 		}
 
 		switch field.FieldType {

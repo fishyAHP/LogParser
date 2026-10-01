@@ -12,7 +12,7 @@ type Lexer struct {
 	operators map[string]LexemeType
 }
 
-func New() *Lexer {
+func NewLexer() *Lexer {
 	return &Lexer{
 		keywords: map[string]LexemeType{
 			"and": AndType,
