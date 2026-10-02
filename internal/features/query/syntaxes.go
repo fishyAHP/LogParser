@@ -10,6 +10,12 @@ type Syntaxes struct {
 	pos int
 }
 
+func NewSyntaxes(lexer *Lexer) *Syntaxes {
+	return &Syntaxes{
+		Lex: lexer,
+	}
+}
+
 func (q *Syntaxes) Query(input string) (Expr, error) {
 	q.pos = 0
 	lexemes, err := q.Lex.Parse(input)

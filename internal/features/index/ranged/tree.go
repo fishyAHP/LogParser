@@ -256,10 +256,10 @@ func (t *rbTree[K]) inBoundPeriod(n *node[K], left, right *localBound[K]) bool {
 	if left != nil {
 		cmp := t.compare(n.key, left.value)
 
-		if left.exclusive {
-			inLeft = cmp > 0
-		} else {
+		if left.inclusive {
 			inLeft = cmp >= 0
+		} else {
+			inLeft = cmp > 0
 		}
 	}
 
@@ -267,10 +267,10 @@ func (t *rbTree[K]) inBoundPeriod(n *node[K], left, right *localBound[K]) bool {
 	if right != nil {
 		cmp := t.compare(n.key, right.value)
 
-		if right.exclusive {
-			inRight = cmp < 0
-		} else {
+		if right.inclusive {
 			inRight = cmp <= 0
+		} else {
+			inRight = cmp < 0
 		}
 	}
 

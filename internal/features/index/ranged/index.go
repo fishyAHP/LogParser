@@ -13,7 +13,7 @@ type Index[K common.Key] struct {
 
 type localBound[K common.Key] struct {
 	value     K
-	exclusive bool
+	inclusive bool
 }
 
 func (i *Index[K]) Range(
@@ -30,7 +30,7 @@ func (i *Index[K]) Range(
 		}
 		fromBound = &localBound[K]{
 			value:     fromVal,
-			exclusive: from.Exclusive,
+			inclusive: from.Inclusive,
 		}
 
 	}
@@ -41,7 +41,7 @@ func (i *Index[K]) Range(
 		}
 		toBound = &localBound[K]{
 			value:     toVal,
-			exclusive: to.Exclusive,
+			inclusive: to.Inclusive,
 		}
 	}
 

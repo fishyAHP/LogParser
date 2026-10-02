@@ -16,13 +16,13 @@ var (
 )
 
 type Service struct {
-	scheme  domain.Scheme
+	Scheme  *domain.Scheme
 	indexes map[string]common.Index
 }
 
-func New(scheme domain.Scheme) (*Service, error) {
+func New(scheme *domain.Scheme) (*Service, error) {
 	service := &Service{
-		scheme:  scheme,
+		Scheme:  scheme,
 		indexes: make(map[string]common.Index, len(scheme.Parameters)),
 	}
 
@@ -59,16 +59,16 @@ func (s *Service) Index(
 	record domain.RecordData,
 	entry domain.LogEntry,
 ) error {
-	if len(entry.Values) != len(s.scheme.Parameters) {
+	if len(entry.Values) != len(s.Scheme.Parameters) {
 		return fmt.Errorf(
-			"entry values count doesn't match scheme: got %d, want %d",
+			"entry values count doesn't match Scheme: got %d, want %d",
 			len(entry.Values),
-			len(s.scheme.Parameters),
+			len(s.Scheme.Parameters),
 		)
 	}
 
 	for i, value := range entry.Values {
-		field := s.scheme.Parameters[i]
+		field := s.Scheme.Parameters[i]
 
 		if idx, ok := s.indexes[field.Name]; ok {
 			if err := idx.Add(value, record); err != nil {

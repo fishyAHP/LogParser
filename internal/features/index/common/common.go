@@ -41,5 +41,5 @@ type TextIndex interface {
 
 type Bound struct {
 	Value     domain.Value
-	Exclusive bool
+	Inclusive bool
 }
