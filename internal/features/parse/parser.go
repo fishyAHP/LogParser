@@ -16,11 +16,11 @@ type Parser interface {
 }
 
 type LogParser struct {
-	scheme domain.Scheme
+	scheme *domain.Scheme
 }
 
-func NewParser(s domain.Scheme) LogParser {
-	return LogParser{
+func NewParser(s *domain.Scheme) *LogParser {
+	return &LogParser{
 		scheme: s,
 	}
 }
