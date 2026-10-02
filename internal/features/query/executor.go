@@ -39,26 +39,41 @@ func (e *Executor) Execute(
 	}
 
 	typedExpr, err := e.semantic.Analyze(expr)
-	res, err := e.executing(typedExpr)
-
 	if err != nil {
-		return nil, fmt.Errorf("executing expression: %w", err)
+		return nil, fmt.Errorf(
+			"semantic analyze: %w",
+			err,
+		)
+	}
+
+	res, err := e.executeExpr(typedExpr)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"executeExpr expression: %w",
+			err,
+		)
 	}
 	return res, nil
 }
 
-func (e *Executor) executing(
+func (e *Executor) executeExpr(
 	typedExpr TypedExpr,
 ) (*set.Set[domain.RecordData], error) {
 	switch ex := typedExpr.(type) {
 	case *TypedBinaryExpr:
-		left, err := e.executing(ex.Left)
+		left, err := e.executeExpr(ex.Left)
 		if err != nil {
-			return nil, fmt.Errorf("left executing: %w", err)
+			return nil, fmt.Errorf(
+				"left executeExpr: %w",
+				err,
+			)
 		}
-		right, err := e.executing(ex.Right)
+		right, err := e.executeExpr(ex.Right)
 		if err != nil {
-			return nil, fmt.Errorf("right executing: %w", err)
+			return nil, fmt.Errorf(
+				"right executeExpr: %w",
+				err,
+			)
 		}
 
 		switch ex.Operator {
@@ -76,14 +91,14 @@ func (e *Executor) executing(
 		case Less, LessOrEqual:
 			right := &common.Bound{
 				Value:     ex.Value,
-				Inclusive: LessOrEqual&ex.Operator != 0,
+				Inclusive: LessOrEqual == ex.Operator,
 			}
 
 			return e.indexes.Range(ex.Field, nil, right)
 		case Bigger, BiggerOrEqual:
 			left := &common.Bound{
 				Value:     ex.Value,
-				Inclusive: BiggerOrEqual&ex.Operator != 0,
+				Inclusive: BiggerOrEqual == ex.Operator,
 			}
 
 			return e.indexes.Range(ex.Field, left, nil)
@@ -91,6 +106,9 @@ func (e *Executor) executing(
 			return nil, fmt.Errorf("unexpected operator")
 		}
 	default:
-		return nil, fmt.Errorf("unexpected expression type: %T", ex)
+		return nil, fmt.Errorf(
+			"unexpected expression type: %T",
+			ex,
+		)
 	}
 }
