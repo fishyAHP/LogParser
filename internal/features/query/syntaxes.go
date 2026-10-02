@@ -5,12 +5,18 @@ import (
 	"fmt"
 )
 
-type Querizer struct {
+type Syntaxes struct {
 	Lex *Lexer
 	pos int
 }
 
-func (q *Querizer) Query(input string) (Expr, error) {
+func NewSyntaxes(lexer *Lexer) *Syntaxes {
+	return &Syntaxes{
+		Lex: lexer,
+	}
+}
+
+func (q *Syntaxes) Query(input string) (Expr, error) {
 	q.pos = 0
 	lexemes, err := q.Lex.Parse(input)
 	if err != nil {
@@ -29,7 +35,7 @@ func (q *Querizer) Query(input string) (Expr, error) {
 	return expression, nil
 }
 
-func (q *Querizer) parseExpression(lexemes []Lexeme) (Expr, error) {
+func (q *Syntaxes) parseExpression(lexemes []Lexeme) (Expr, error) {
 	expression, err := q.parseOr(lexemes)
 	if err != nil {
 		return nil, fmt.Errorf("parse or: %w", err)
@@ -38,7 +44,7 @@ func (q *Querizer) parseExpression(lexemes []Lexeme) (Expr, error) {
 	return expression, nil
 }
 
-func (q *Querizer) parseOr(lexemes []Lexeme) (Expr, error) {
+func (q *Syntaxes) parseOr(lexemes []Lexeme) (Expr, error) {
 	left, err := q.parseAnd(lexemes)
 	if err != nil {
 		return nil, fmt.Errorf("left parse and: %w", err)
@@ -67,7 +73,7 @@ func (q *Querizer) parseOr(lexemes []Lexeme) (Expr, error) {
 	return left, nil
 }
 
-func (q *Querizer) parseAnd(lexemes []Lexeme) (Expr, error) {
+func (q *Syntaxes) parseAnd(lexemes []Lexeme) (Expr, error) {
 	left, err := q.parsePrimary(lexemes)
 	if err != nil {
 		return nil, fmt.Errorf("query parse primary: %w", err)
@@ -96,7 +102,7 @@ func (q *Querizer) parseAnd(lexemes []Lexeme) (Expr, error) {
 	return left, nil
 }
 
-func (q *Querizer) parsePrimary(lexemes []Lexeme) (Expr, error) {
+func (q *Syntaxes) parsePrimary(lexemes []Lexeme) (Expr, error) {
 	if q.pos < len(lexemes) &&
 		lexemes[q.pos].Type == LeftParen {
 		q.pos++
@@ -119,11 +125,11 @@ func (q *Querizer) parsePrimary(lexemes []Lexeme) (Expr, error) {
 	return q.parseComparison(lexemes)
 }
 
-func (q *Querizer) parseComparison(lexemes []Lexeme) (Expr, error) {
+func (q *Syntaxes) parseComparison(lexemes []Lexeme) (Expr, error) {
 	var cond Condition
 
 	if q.pos+2 >= len(lexemes) {
-		return nil, errors.New("index out of range")
+		return nil, errors.New("index out of ranged")
 	}
 
 	field := lexemes[q.pos]

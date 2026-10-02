@@ -1,51 +1,38 @@
-package timestamp
+package ranged
 
 import (
 	"errors"
 	"math"
-	"time"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
+	"fishyAHP/LogParser.git/internal/features/index/common"
 	"fishyAHP/LogParser.git/internal/features/index/set"
 )
 
-type rbTree struct {
-	root       *node
-	accuracy   time.Duration
+type rbTree[K common.Key] struct {
+	root *node[K]
+
+	// t.compare returns
+	// -1 if k1 less than k2
+	// 0 if k1 equal to k2
+	// 1 if k1 more than k2
+	// it need to find place for insert in rb-tree
+	compare func(K, K) int
+
 	elemsCount int
 	nodesCount int
 }
 
-func newRBTree(accuracy time.Duration) *rbTree {
-	return &rbTree{
-		accuracy: accuracy,
+func newRBTree[K common.Key](comparator func(K, K) int) *rbTree[K] {
+	return &rbTree[K]{
+		compare: comparator,
 	}
 }
 
-// t.compare returns
-// -1 if k1 less than k2
-// 0 if k1 equal to k2
-// 1 if k1 more than k2
-// it need to find place for insert in rb-tree
-func (t *rbTree) compare(k1, k2 time.Time) int {
-	k1 = k1.Truncate(t.accuracy)
-	k2 = k2.Truncate(t.accuracy)
-
-	switch {
-	case k1.Before(k2):
-		return -1
-	case k1.After(k2):
-		return 1
-	default:
-		return 0
-	}
-}
-
-func (t *rbTree) Insert(key time.Time, value domain.RecordData) (err error) {
-	if time.Since(key) < 0 {
-		return errors.New("key in future")
-	}
-
+func (t *rbTree[K]) insert(
+	key K,
+	value domain.RecordData,
+) (err error) {
 	if t.elemsCount < 1 {
 		t.root = newNode(key, value)
 		t.nodesCount++
@@ -99,7 +86,7 @@ func (t *rbTree) Insert(key time.Time, value domain.RecordData) (err error) {
 	}
 }
 
-func (t *rbTree) fixInsert(n *node) {
+func (t *rbTree[K]) fixInsert(n *node[K]) {
 	parent := n.parent
 	if parent == nil {
 		t.root.color = Black
@@ -147,7 +134,7 @@ func (t *rbTree) fixInsert(n *node) {
 	}
 }
 
-func (t *rbTree) leftRotate(child *node) {
+func (t *rbTree[K]) leftRotate(child *node[K]) {
 	if child.parent == nil ||
 		child != child.parent.right {
 		return
@@ -177,7 +164,7 @@ func (t *rbTree) leftRotate(child *node) {
 	child.left = parent
 }
 
-func (t *rbTree) rightRotate(n *node) {
+func (t *rbTree[K]) rightRotate(n *node[K]) {
 	if n.parent == nil ||
 		n != n.parent.left {
 		return
@@ -207,11 +194,11 @@ func (t *rbTree) rightRotate(n *node) {
 	n.right = parent
 }
 
-// Find return []domain.RecordData,
+// find return []domain.RecordData,
 // because if it will return domain.RecordData, it changes
 // from O(log n) to O(n). Also this func return bool which means
 // if true, it founded key, another not yet.
-func (t *rbTree) Find(key time.Time) (*set.Set[domain.RecordData], bool) {
+func (t *rbTree[K]) find(key K) (*set.Set[domain.RecordData], bool) {
 	cur := t.root
 
 	for cur != nil {
@@ -230,13 +217,8 @@ func (t *rbTree) Find(key time.Time) (*set.Set[domain.RecordData], bool) {
 	return nil, false
 }
 
-func (t *rbTree) Range(from, to time.Time) ([]domain.RecordData, bool) {
-	if t.compare(from, to) == 1 {
-		return nil, false
-	}
-
+func (t *rbTree[K]) innerRange(from, to *localBound[K]) ([]domain.RecordData, bool) {
 	result := make([]domain.RecordData, 0)
-
 	result = t.rangeSearch(t.root, from, to, result)
 
 	if len(result) == 0 {
@@ -245,36 +227,61 @@ func (t *rbTree) Range(from, to time.Time) ([]domain.RecordData, bool) {
 	return result, true
 }
 
-func (t *rbTree) rangeSearch(
-	n *node,
-	from, to time.Time,
+func (t *rbTree[K]) rangeSearch(
+	n *node[K],
+	from, to *localBound[K],
 	res []domain.RecordData,
 ) []domain.RecordData {
 	if n == nil {
 		return res
 	}
 
-	if t.compare(n.key, from) == 1 {
+	if from == nil || t.compare(n.key, from.value) > 0 {
 		res = t.rangeSearch(n.left, from, to, res)
 	}
 
-	if t.compare(n.key, from) > -1 &&
-		t.compare(n.key, to) < 1 {
+	if t.inBoundPeriod(n, from, to) {
 		res = append(res, n.records.Slice()...)
 	}
 
-	if t.compare(n.key, to) == -1 {
+	if to == nil || t.compare(n.key, to.value) < 0 {
 		res = t.rangeSearch(n.right, from, to, res)
 	}
 
 	return res
 }
 
-func (t *rbTree) Len() int {
+func (t *rbTree[K]) inBoundPeriod(n *node[K], left, right *localBound[K]) bool {
+	inLeft := true
+	if left != nil {
+		cmp := t.compare(n.key, left.value)
+
+		if left.inclusive {
+			inLeft = cmp >= 0
+		} else {
+			inLeft = cmp > 0
+		}
+	}
+
+	inRight := true
+	if right != nil {
+		cmp := t.compare(n.key, right.value)
+
+		if right.inclusive {
+			inRight = cmp <= 0
+		} else {
+			inRight = cmp < 0
+		}
+	}
+
+	return inLeft && inRight
+}
+
+func (t *rbTree[K]) len() int {
 	return t.elemsCount
 }
 
-func (t *rbTree) Height() int {
+func (t *rbTree[K]) height() int {
 	return int(
 		2 * math.Log2(
 			float64(t.nodesCount+1),
@@ -282,7 +289,7 @@ func (t *rbTree) Height() int {
 	)
 }
 
-func (t *rbTree) Min() *node {
+func (t *rbTree[K]) min() *node[K] {
 	cur := t.root
 
 	for cur.left != nil {
@@ -292,7 +299,7 @@ func (t *rbTree) Min() *node {
 	return cur
 }
 
-func (t *rbTree) Max() *node {
+func (t *rbTree[K]) max() *node[K] {
 	cur := t.root
 
 	for cur.right != nil {
@@ -302,16 +309,12 @@ func (t *rbTree) Max() *node {
 	return cur
 }
 
-func (t *rbTree) Clear() {
+func (t *rbTree[K]) clear() {
 	t.root = nil
 	t.elemsCount = 0
 	t.nodesCount = 0
 }
 
-func (t *rbTree) Remove(key time.Time) bool {
-	return false
-}
-
-func (t *rbTree) Delete(key time.Time, value domain.RecordData) bool {
+func (t *rbTree[K]) remove(key K, value domain.RecordData) bool {
 	return false
 }

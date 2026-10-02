@@ -11,92 +11,183 @@ import (
 )
 
 type SemanticAnalyzer struct {
-	scheme      *domain.Scheme
-	possibleOps map[domain.DataType][]CompareOperator
+	scheme *domain.Scheme
 }
 
 func NewSemanticAnalyzer(scheme *domain.Scheme) *SemanticAnalyzer {
-	rangable := []CompareOperator{Equal, Less, LessOrEqual, Bigger, BiggerOrEqual}
-	equalable := []CompareOperator{Equal}
-
 	return &SemanticAnalyzer{
 		scheme: scheme,
-		possibleOps: map[domain.DataType][]CompareOperator{
-			domain.StringType: equalable, domain.BoolType: equalable,
-			domain.IntType: rangable, domain.FloatType: rangable,
-			domain.TimeType: rangable, domain.Array: equalable,
-		},
 	}
 }
 
-func (s *SemanticAnalyzer) Analyze(expr Expr) error {
+type TypedExpr interface {
+	isTypedExpr()
+}
+
+type TypedBinaryExpr struct {
+	Left     TypedExpr
+	Operator LogicalOperator
+	Right    TypedExpr
+}
+
+type TypedCondition struct {
+	Field    string
+	Operator CompareOperator
+	Value    domain.Value
+}
+
+func (t *TypedCondition) isTypedExpr()  {}
+func (t *TypedBinaryExpr) isTypedExpr() {}
+
+func allowedOperators(typ domain.IndexType) CompareOperator {
+	switch typ {
+	case domain.HashIndex, domain.TextIndex:
+		return EqualityOps
+	case domain.RangeIndex:
+		return OrderedOps
+	default:
+		return 0
+	}
+}
+
+func isAllowed(allowed, op CompareOperator) bool {
+	return allowed&op != 0
+}
+
+func (s *SemanticAnalyzer) Analyze(expr Expr) (TypedExpr, error) {
 	if expr == nil {
-		return errors.New("expression is nil")
+		return nil, errors.New("expression is nil")
 	}
 
 	switch e := expr.(type) {
 	case *BinaryExpr:
-		if err := s.Analyze(e.Left); err != nil {
-			return fmt.Errorf("left analyze: %w", err)
-		}
-		if err := s.Analyze(e.Right); err != nil {
-			return fmt.Errorf("right analyze: %w", err)
+		left, err := s.Analyze(e.Left)
+		if err != nil {
+			return nil, fmt.Errorf("left analyze: %w", err)
 		}
 
-		return nil
+		right, err := s.Analyze(e.Right)
+		if err != nil {
+			return nil, fmt.Errorf("right analyze: %w", err)
+		}
+		return &TypedBinaryExpr{
+			Left:     left,
+			Operator: e.Operator,
+			Right:    right,
+		}, nil
 	case *Condition:
-		idx := slices.IndexFunc(s.scheme.Parameters, func(a domain.Field) bool {
-			if a.Name == e.Field {
-				return true
-			}
-			return false
-		})
+		idx := slices.IndexFunc(
+			s.scheme.Parameters,
+			func(a domain.Field) bool {
+				return a.Name == e.Field
+			})
 		if idx == -1 {
-			return fmt.Errorf("unknown field in condition: %s", e.Field)
+			return nil, fmt.Errorf("unknown field in condition: %s", e.Field)
 		}
 
 		field := s.scheme.Parameters[idx]
-		if ops, ok := s.possibleOps[field.FieldType]; !ok {
-			return fmt.Errorf("unknown type of field: %d", field.FieldType)
-		} else if !slices.ContainsFunc(ops, func(a CompareOperator) bool {
-			if a == e.Operator {
-				return true
-			}
-			return false
-		}) {
-			return fmt.Errorf("operator '%s' is not supported for field %q", e.Operator, e.Field)
+		if !isAllowed(
+			allowedOperators(field.IndexType),
+			e.Operator) {
+			return nil, fmt.Errorf(
+				"operator %v is not supported for %v",
+				e.Operator,
+				field.IndexType,
+			)
 		}
 
-		switch field.FieldType {
-		case domain.StringType:
-			if e.Value.Type != String {
-				return fmt.Errorf("want string type, got: %s", e.Value.Type)
-			}
-		case domain.IntType:
-			if e.Value.Type != Number {
-				return fmt.Errorf("want int type, got: %s", e.Value)
-			}
-			if _, err := strconv.Atoi(e.Value.Literal); err != nil {
-				return fmt.Errorf("semantic parse float: %w", err)
-			}
-		case domain.FloatType:
-			if e.Value.Type != Number {
-				return fmt.Errorf("want float type, got: %s", e.Value)
-			}
-			if _, err := strconv.ParseFloat(e.Value.Literal, 64); err != nil {
-				return fmt.Errorf("semantic parse float: %w", err)
-			}
-		case domain.BoolType:
-			if e.Value.Type != Bool {
-				return fmt.Errorf("want bool type, got: %s", e.Value)
-			}
-		case domain.TimeType:
-			if _, err := time.Parse(time.RFC3339, e.Value.Literal); err != nil {
-				return fmt.Errorf("want time type, got: %s", e.Value)
-			}
-		default:
-			return nil
+		value, err := parseValue(field.FieldType, e.Value)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"field %q: %w",
+				e.Field,
+				err,
+			)
 		}
+		return &TypedCondition{
+			Field:    e.Field,
+			Operator: e.Operator,
+			Value:    value,
+		}, nil
 	}
-	return nil
+	return nil, fmt.Errorf(
+		"invalid type of expression: want %T or %T, got %T",
+		BinaryExpr{}, Condition{}, expr)
+}
+
+func parseValue(field domain.DataType, lexeme Lexeme) (domain.Value, error) {
+	switch field {
+	case domain.StringType:
+		if lexeme.Type != String {
+			return nil, fmt.Errorf(
+				"want string type, got: %s",
+				lexeme.Type,
+			)
+		}
+
+		return domain.StringValue(lexeme.Literal), nil
+	case domain.IntType:
+		if lexeme.Type != Number {
+			return nil, fmt.Errorf(
+				"want int type, got: %s",
+				lexeme.Type,
+			)
+		}
+
+		val, err := strconv.ParseInt(lexeme.Literal, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("semantic parse int: %w", err)
+		}
+
+		return domain.IntValue(val), nil
+	case domain.FloatType:
+		if lexeme.Type != Number {
+			return nil, fmt.Errorf(
+				"want float type, got: %s",
+				lexeme.Type,
+			)
+		}
+		val, err := strconv.ParseFloat(lexeme.Literal, 64)
+		if err != nil {
+			return nil, fmt.Errorf("semantic parse float: %w", err)
+		}
+
+		return domain.FloatValue(val), nil
+	case domain.BoolType:
+		if lexeme.Type != Bool {
+			return nil, fmt.Errorf("want bool type, got: %s",
+				lexeme.Type,
+			)
+		}
+
+		val, err := strconv.ParseBool(lexeme.Literal)
+		if err != nil {
+			return nil, fmt.Errorf("semantic parse bool: %w", err)
+		}
+
+		return domain.BoolValue(val), nil
+	case domain.TimeType:
+		if lexeme.Type != String {
+			return nil, fmt.Errorf(
+				"want string type, got: %s",
+				lexeme.Type,
+			)
+		}
+
+		parsed, err := time.Parse(time.RFC3339, lexeme.Literal)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"parse time %q as RFC3339: %w",
+				lexeme.Literal,
+				err,
+			)
+		}
+
+		return domain.TimeValue(parsed), nil
+	default:
+		return nil, fmt.Errorf(
+			"unsupported field type: %v",
+			field,
+		)
+	}
 }

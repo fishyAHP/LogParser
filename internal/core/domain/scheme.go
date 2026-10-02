@@ -6,6 +6,17 @@ import (
 	"strings"
 )
 
+type Scheme struct {
+	Separator  rune
+	Parameters []Field
+}
+
+type Field struct {
+	Name      string
+	FieldType DataType
+	IndexType IndexType
+}
+
 type DataType uint8
 
 const (
@@ -17,15 +28,14 @@ const (
 	TimeType
 )
 
-type Field struct {
-	Name      string
-	FieldType DataType
-}
+type IndexType uint8
 
-type Scheme struct {
-	Separator  rune
-	Parameters []Field
-}
+const (
+	NoIndex IndexType = 1 << iota
+	HashIndex
+	TextIndex
+	RangeIndex
+)
 
 func (s *Scheme) Validate() error {
 	if s.Separator == 0 {

@@ -8,7 +8,7 @@ type Tokenizer struct {
 
 func NewTokenizer(sep rune) Tokenizer {
 	return Tokenizer{
-		sep,
+		separator: sep,
 	}
 }
 
@@ -21,8 +21,8 @@ func (t *Tokenizer) Tokenize(raw string) []Token {
 	result := make([]Token, 0, 6)
 
 	for {
-		if r, ok := scanner.peek(); ok && r == t.separator {
-			s := scanner.getValue()
+		if r, ok := scanner.Peek(); ok && r == t.separator {
+			s := scanner.GetValue()
 			result = append(result, newToken(
 				s,
 				TokenString,
@@ -33,8 +33,8 @@ func (t *Tokenizer) Tokenize(raw string) []Token {
 			))
 		}
 
-		if scanner.advance() != nil {
-			s := scanner.getValue()
+		if scanner.Advance() != nil {
+			s := scanner.GetValue()
 			result = append(result, newToken(
 				s,
 				TokenString,

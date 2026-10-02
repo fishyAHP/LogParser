@@ -1,8 +1,6 @@
-package timestamp
+package ranged
 
 import (
-	"time"
-
 	"fishyAHP/LogParser.git/internal/core/domain"
 	"fishyAHP/LogParser.git/internal/features/index/set"
 )
@@ -14,32 +12,32 @@ const (
 	Black
 )
 
-type node struct {
-	key     time.Time
+type node[K comparable] struct {
+	key     K
 	records *set.Set[domain.RecordData]
 
-	left, right *node
-	parent      *node
+	left, right *node[K]
+	parent      *node[K]
 
 	color color
 }
 
-func newNode(key time.Time, value domain.RecordData) *node {
+func newNode[K comparable](key K, value domain.RecordData) *node[K] {
 	s := set.New[domain.RecordData](0)
 	s.Add(value)
 
-	return &node{
+	return &node[K]{
 		key:     key,
 		records: s,
 		color:   Red,
 	}
 }
 
-func (n *node) add(value domain.RecordData) bool {
+func (n *node[K]) add(value domain.RecordData) bool {
 	return n.records.Add(value)
 }
 
-func (n *node) uncle() *node {
+func (n *node[K]) uncle() *node[K] {
 	parent := n.parent
 	grandparent := parent.parent
 
