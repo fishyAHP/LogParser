@@ -33,7 +33,7 @@ func (i *Index) Search(value domain.Value) (*set.Set[domain.RecordData], error) 
 	if res == nil {
 		return nil, common.ErrNotFoundRecord
 	}
-	return res, nil
+	return res.Clone(), nil
 }
 
 func (i *Index) Add(value domain.Value, record domain.RecordData) error {

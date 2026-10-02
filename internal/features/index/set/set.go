@@ -56,3 +56,13 @@ func (s *Set[K]) Contains(value K) bool {
 	}
 	return false
 }
+
+func (s *Set[K]) Clone() *Set[K] {
+	newSet := New[K](s.Len())
+
+	for k := range s.set {
+		newSet.Add(k)
+	}
+
+	return newSet
+}

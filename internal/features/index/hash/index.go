@@ -36,7 +36,7 @@ func (i *Index[K]) Exact(
 		return nil, common.ErrNotFoundRecord
 	}
 
-	return s, nil
+	return s.Clone(), nil
 }
 
 func (i *Index[K]) Add(

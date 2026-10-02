@@ -29,7 +29,10 @@ func newRBTree[K common.Key](comparator func(K, K) int) *rbTree[K] {
 	}
 }
 
-func (t *rbTree[K]) Insert(key K, value domain.RecordData) (err error) {
+func (t *rbTree[K]) insert(
+	key K,
+	value domain.RecordData,
+) (err error) {
 	if t.elemsCount < 1 {
 		t.root = newNode(key, value)
 		t.nodesCount++
@@ -191,11 +194,11 @@ func (t *rbTree[K]) rightRotate(n *node[K]) {
 	n.right = parent
 }
 
-// Find return []domain.RecordData,
+// find return []domain.RecordData,
 // because if it will return domain.RecordData, it changes
 // from O(log n) to O(n). Also this func return bool which means
 // if true, it founded key, another not yet.
-func (t *rbTree[K]) Find(key K) (*set.Set[domain.RecordData], bool) {
+func (t *rbTree[K]) find(key K) (*set.Set[domain.RecordData], bool) {
 	cur := t.root
 
 	for cur != nil {
@@ -214,7 +217,7 @@ func (t *rbTree[K]) Find(key K) (*set.Set[domain.RecordData], bool) {
 	return nil, false
 }
 
-func (t *rbTree[K]) Range(from, to *localBound[K]) ([]domain.RecordData, bool) {
+func (t *rbTree[K]) innerRange(from, to *localBound[K]) ([]domain.RecordData, bool) {
 	result := make([]domain.RecordData, 0)
 	result = t.rangeSearch(t.root, from, to, result)
 
@@ -274,11 +277,11 @@ func (t *rbTree[K]) inBoundPeriod(n *node[K], left, right *localBound[K]) bool {
 	return inLeft && inRight
 }
 
-func (t *rbTree[K]) Len() int {
+func (t *rbTree[K]) len() int {
 	return t.elemsCount
 }
 
-func (t *rbTree[K]) Height() int {
+func (t *rbTree[K]) height() int {
 	return int(
 		2 * math.Log2(
 			float64(t.nodesCount+1),
@@ -286,7 +289,7 @@ func (t *rbTree[K]) Height() int {
 	)
 }
 
-func (t *rbTree[K]) Min() *node[K] {
+func (t *rbTree[K]) min() *node[K] {
 	cur := t.root
 
 	for cur.left != nil {
@@ -296,7 +299,7 @@ func (t *rbTree[K]) Min() *node[K] {
 	return cur
 }
 
-func (t *rbTree[K]) Max() *node[K] {
+func (t *rbTree[K]) max() *node[K] {
 	cur := t.root
 
 	for cur.right != nil {
@@ -306,12 +309,12 @@ func (t *rbTree[K]) Max() *node[K] {
 	return cur
 }
 
-func (t *rbTree[K]) Clear() {
+func (t *rbTree[K]) clear() {
 	t.root = nil
 	t.elemsCount = 0
 	t.nodesCount = 0
 }
 
-func (t *rbTree[K]) Remove(key K, value domain.RecordData) bool {
+func (t *rbTree[K]) remove(key K, value domain.RecordData) bool {
 	return false
 }

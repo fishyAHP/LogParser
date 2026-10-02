@@ -31,7 +31,7 @@ const (
 type IndexType uint8
 
 const (
-	NoIndex IndexType = iota
+	NoIndex IndexType = 1 << iota
 	HashIndex
 	TextIndex
 	RangeIndex

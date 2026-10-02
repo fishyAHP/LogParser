@@ -45,7 +45,7 @@ func (i *Index[K]) Range(
 		}
 	}
 
-	records, ok := i.tree.Range(fromBound, toBound)
+	records, ok := i.tree.innerRange(fromBound, toBound)
 	if !ok {
 		return nil, common.ErrNotFoundRecord
 	}
@@ -64,7 +64,7 @@ func (i *Index[K]) Exact(
 		return nil, common.ErrInvalidType
 	}
 
-	res, ok := i.tree.Find(key)
+	res, ok := i.tree.find(key)
 	if !ok {
 		return nil, common.ErrNotFoundRecord
 	}
@@ -79,7 +79,7 @@ func (i *Index[K]) Add(
 	if !ok {
 		return common.ErrInvalidType
 	}
-	return i.tree.Insert(key, record)
+	return i.tree.insert(key, record)
 }
 
 func New[K common.Key](comparator func(K, K) int) *Index[K] {
@@ -97,7 +97,7 @@ func (i *Index[K]) Remove(
 		return common.ErrInvalidType
 	}
 
-	deleted := i.tree.Remove(key, data)
+	deleted := i.tree.remove(key, data)
 	if !deleted {
 		return common.ErrNotFoundRecord
 	}
@@ -105,29 +105,29 @@ func (i *Index[K]) Remove(
 }
 
 func (i *Index[K]) Min() *set.Set[domain.RecordData] {
-	if i.tree.Len() == 0 {
+	if i.tree.len() == 0 {
 		return nil
 	}
-	if i.tree.Len() == 1 {
+	if i.tree.len() == 1 {
 		return i.tree.root.records
 	}
 
-	minNode := i.tree.Min()
+	minNode := i.tree.min()
 
 	return minNode.records
 }
 
 func (i *Index[K]) Max() *set.Set[domain.RecordData] {
-	if i.tree.Len() == 0 {
+	if i.tree.len() == 0 {
 		return nil
 	}
-	if i.tree.Len() == 1 {
+	if i.tree.len() == 1 {
 		return i.tree.root.records
 	}
 
-	maxNode := i.tree.Max()
+	maxNode := i.tree.max()
 
-	return maxNode.records
+	return maxNode.records.Clone()
 }
 
 func (i *Index[K]) Len() int {
@@ -135,5 +135,5 @@ func (i *Index[K]) Len() int {
 }
 
 func (i *Index[K]) Clear() {
-	i.tree.Clear()
+	i.tree.clear()
 }
