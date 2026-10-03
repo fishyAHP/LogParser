@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"sync"
-	"time"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
 )
@@ -28,13 +27,6 @@ type Storage struct {
 // Если сегментов нет, то создает новый.
 // Если размер последнего сегмента больше максимального заданного значения, то надо создать новый.
 func New(path string) (*Storage, error) {
-	if _, err := time.Parse(
-		"storage/logs/2006-01-02/15",
-		path[len(path)-len("storage/logs/2006-01-02/15"):],
-	); err != nil {
-		return nil, fmt.Errorf("time parse path: %w", err)
-	}
-
 	// os.MkdirAll открывает нужную директорию или создает все директории на указанном пути,
 	// если их не было. Права дает создателю все возможности, а остальным возможность читать
 	// и выполнять

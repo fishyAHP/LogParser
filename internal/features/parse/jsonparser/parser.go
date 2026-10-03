@@ -57,13 +57,6 @@ func (jp *JSONParser) Parse(data []byte) (domain.LogEntry, error) {
 	return domain.LogEntry{Values: res}, nil
 }
 
-// {"name":"ilya","age":19,"salary":-100} -> map[string]Value{
-// "name": "ilya",
-// "age" : "19",
-// "salary": "-100"
-// }
-// name -> string, age -> int
-
 func decodeValue(
 	value jsontext.Value,
 	typ domain.DataType,
@@ -81,7 +74,7 @@ func decodeValue(
 
 		return domain.IntValue(intVal), nil
 	case domain.TimeType:
-		parsedTime, err := time.Parse(time.RFC3339, strVal)
+		parsedTime, err := time.Parse(time.RFC3339, strVal[1:len(strVal)-1])
 		if err != nil {
 			return nil, fmt.Errorf(
 				"parse time: %w",
@@ -111,7 +104,15 @@ func decodeValue(
 
 		return domain.FloatValue(floatVal), nil
 	case domain.StringType:
-		return domain.StringValue(strVal), nil
+		var parsed string
+		if err := jsonv2.Unmarshal(value, &parsed); err != nil {
+			return nil, fmt.Errorf(
+				"parse string: %w",
+				err,
+			)
+		}
+
+		return domain.StringValue(parsed), nil
 	default:
 		return nil, fmt.Errorf("unknown type in scheme: %v", typ)
 	}
