@@ -1,3 +1,3 @@
-package features_parser_json
+package jsonparser
 
 // здесь кирилл сделает тесты для парсера
