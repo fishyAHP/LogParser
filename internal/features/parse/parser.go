@@ -1,82 +1,31 @@
 package parse
 
 import (
-	"fmt"
-	"strconv"
-	"time"
-
 	"fishyAHP/LogParser.git/internal/core/domain"
-	"fishyAHP/LogParser.git/internal/features/tokenizer"
+	"fishyAHP/LogParser.git/internal/features/parse/jsonparser"
 )
 
 // Parser представляет собой интерфейс, который позволяет с помощью метода Parse
 // превратить слайс байт в логическое представление лога и ошибку при невалидном входном слайсе
 type Parser interface {
-	Parse(data []tokenizer.Token) (domain.LogEntry, error)
+	Parse(data []byte) (domain.LogEntry, error)
 }
 
 type LogParser struct {
-	scheme *domain.Scheme
+	parser Parser
 }
 
-func NewParser(s *domain.Scheme) *LogParser {
+func NewParser(s *domain.Scheme, format domain.Format) *LogParser {
+	var parser Parser
+	switch format {
+	case domain.JSON:
+		parser = jsonparser.New(s)
+	}
 	return &LogParser{
-		scheme: s,
+		parser: parser,
 	}
 }
 
-func (p *LogParser) Parse(data []tokenizer.Token) (domain.LogEntry, error) {
-	cleanToken := make([]string, 0, len(data)/2)
-	for _, value := range data {
-		if value.Type == tokenizer.TokenString {
-			cleanToken = append(cleanToken, value.Value)
-		}
-	}
-	if len(cleanToken) != len(p.scheme.Parameters) {
-		return domain.LogEntry{},
-			fmt.Errorf("want %d parameters, got %d", len(p.scheme.Parameters), len(cleanToken))
-	}
-
-	logEntry := domain.LogEntry{
-		Values: make([]domain.Value, 0, len(cleanToken)),
-	}
-	for i, field := range p.scheme.Parameters {
-		value := cleanToken[i]
-
-		switch field.FieldType {
-		case domain.IntType:
-			intVal, err := strconv.ParseInt(value, 10, 64)
-			if err != nil {
-				return domain.LogEntry{}, err
-			}
-			logEntry.Values = append(logEntry.Values, domain.IntValue(intVal))
-
-		case domain.TimeType:
-			parsedTime, err := time.Parse(time.RFC3339, value)
-			if err != nil {
-				return domain.LogEntry{}, err
-			}
-			logEntry.Values = append(logEntry.Values, domain.TimeValue(parsedTime))
-
-		case domain.BoolType:
-			boolVal, err := strconv.ParseBool(value)
-			if err != nil {
-				return domain.LogEntry{}, err
-			}
-			logEntry.Values = append(logEntry.Values, domain.BoolValue(boolVal))
-
-		case domain.FloatType:
-			floatVal, err := strconv.ParseFloat(value, 64)
-			if err != nil {
-				return domain.LogEntry{}, err
-			}
-			logEntry.Values = append(logEntry.Values, domain.FloatValue(floatVal))
-
-		case domain.StringType:
-			logEntry.Values = append(logEntry.Values, domain.StringValue(value))
-		default:
-			return domain.LogEntry{}, fmt.Errorf("unknown type in scheme: %d", field.FieldType)
-		}
-	}
-	return logEntry, nil
+func (p *LogParser) Parse(data []byte) (domain.LogEntry, error) {
+	return p.parser.Parse(data)
 }

@@ -19,6 +19,7 @@ type Service struct {
 
 func NewService(
 	scheme *domain.Scheme,
+	format domain.Format,
 	storagePath string,
 ) (*Service, error) {
 	idx, err := index.New(scheme)
@@ -31,10 +32,13 @@ func NewService(
 		return nil, fmt.Errorf("new storage: %w", err)
 	}
 
+	executor := query.NewExecutor(idx)
+	parser := parse.NewParser(scheme, format)
+
 	return &Service{
 		index:    idx,
-		executor: query.NewExecutor(idx),
-		parser:   parse.NewParser(scheme),
+		executor: executor,
+		parser:   parser,
 		store:    store,
 	}, nil
 }

@@ -25,8 +25,8 @@ var (
 	_ common.RangeIndex = (*ranged.Index[domain.TimeValue])(nil)
 )
 
-func newHashIndex(field domain.Field) (common.Index, error) {
-	switch field.FieldType {
+func newHashIndex(typ domain.DataType) (common.Index, error) {
+	switch typ {
 	case domain.StringType:
 		return hash.New[domain.StringValue](), nil
 	case domain.BoolType:
@@ -38,13 +38,13 @@ func newHashIndex(field domain.Field) (common.Index, error) {
 	default:
 		return nil, fmt.Errorf(
 			"hash index doesnt support %v type",
-			field.FieldType,
+			typ,
 		)
 	}
 }
 
-func newRangeIndex(field domain.Field) (common.Index, error) {
-	switch field.FieldType {
+func newRangeIndex(typ domain.DataType) (common.Index, error) {
+	switch typ {
 	case domain.IntType:
 		return ranged.New[domain.IntValue](
 			cmp.Compare[domain.IntValue],
@@ -71,18 +71,19 @@ func newRangeIndex(field domain.Field) (common.Index, error) {
 	default:
 		return nil, fmt.Errorf(
 			"ranged index doesn't support %v type",
-			field.FieldType,
+			typ,
 		)
 	}
 }
 
-func newTextIndex(field domain.Field) (common.Index, error) {
-	switch field.FieldType {
+func newTextIndex(typ domain.DataType) (common.Index, error) {
+	switch typ {
 	case domain.StringType:
 		return text.New(), nil
 	default:
 		return nil, fmt.Errorf(
 			"text index doesn't support %v type",
-			field.FieldType)
+			typ,
+		)
 	}
 }

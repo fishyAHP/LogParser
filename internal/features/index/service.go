@@ -45,11 +45,11 @@ func newFieldIndex(field domain.Field) (common.Index, error) {
 	case domain.NoIndex:
 		return nil, nil
 	case domain.HashIndex:
-		return newHashIndex(field)
+		return newHashIndex(field.FieldType)
 	case domain.TextIndex:
-		return newTextIndex(field)
+		return newTextIndex(field.FieldType)
 	case domain.RangeIndex:
-		return newRangeIndex(field)
+		return newRangeIndex(field.FieldType)
 	default:
 		return nil, ErrUnknownIndexType
 	}
