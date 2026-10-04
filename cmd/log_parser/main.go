@@ -74,10 +74,12 @@ func (c *Cli) Run() error {
 		fmt.Fprint(c.out, "Enter a command: ")
 		data := make([]byte, 1024)
 		n, err := c.in.Read(data)
+
 		if err != nil {
 			return err
 		}
 		line := strings.TrimSpace(string(data[:n]))
+
 		exit, err := c.execute(line)
 		if err != nil {
 			return err
