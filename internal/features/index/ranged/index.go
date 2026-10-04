@@ -10,7 +10,6 @@ import (
 type Index[K common.Key] struct {
 	tree *rbTree[K]
 }
-
 type localBound[K common.Key] struct {
 	value     K
 	inclusive bool
