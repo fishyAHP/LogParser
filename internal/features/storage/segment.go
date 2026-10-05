@@ -113,7 +113,7 @@ func newSegment(dir string, id uint32) (*segment, error) {
 }
 
 func writeFileHeader(file *os.File) error {
-	n, err := file.WriteAt(Magic, 0)
+	n, err := file.Write(Magic)
 	if err != nil {
 		return fmt.Errorf("write magic: %w", err)
 	}
@@ -148,18 +148,18 @@ func (s *segment) isOverloaded(size FileSize) bool {
 }
 
 const (
-	lengthSize   = 4 * Byte
-	recordIdSize = 8 * Byte
-	headerSize   = lengthSize + recordIdSize
+	RecordLengthSize = 4 * Byte
+	RecordIdSize     = 8 * Byte
+	RecordHeaderSize = RecordLengthSize + RecordIdSize
 )
 
 func (s *segment) Write(data []byte) (*domain.RecordData, error) {
-	header := make([]byte, headerSize)
+	header := make([]byte, RecordHeaderSize)
 
 	binary.BigEndian.PutUint32(header[0:4], uint32(len(data)))
 	binary.BigEndian.PutUint64(header[4:12], Records+1)
 
-	buf := make([]byte, 0, int(headerSize)+len(data))
+	buf := make([]byte, 0, int(RecordHeaderSize)+len(data))
 	buf = append(buf, header...)
 	buf = append(buf, data...)
 
@@ -168,12 +168,15 @@ func (s *segment) Write(data []byte) (*domain.RecordData, error) {
 		return &domain.RecordData{},
 			fmt.Errorf("write segment file: %w", err)
 	}
+	if n != len(buf) {
+		return nil, io.ErrShortWrite
+	}
 
 	Records++
 	rd := domain.NewRecordData(
-		uint32(n),
+		uint32(len(data)),
 		s.ID,
-		uint64(s.size+headerSize),
+		uint64(s.size+RecordHeaderSize),
 		Records,
 		filepath.Dir(s.file.Name()),
 	)
@@ -182,24 +185,30 @@ func (s *segment) Write(data []byte) (*domain.RecordData, error) {
 	return rd, nil
 }
 
-func (s *segment) Read(rd *domain.RecordData) (data []byte, err error) {
+func (s *segment) Read(rd *domain.RecordData) ([]byte, error) {
 	if s.ID != rd.Pointer.SegmentID {
 		return nil, errors.New("segment read: not suitable record data")
 	}
 
-	if _, err = s.file.Seek(
+	if _, err := s.file.Seek(
 		int64(rd.Pointer.Offset),
 		io.SeekStart,
 	); err != nil {
-		return nil, fmt.Errorf("seek segment file: %w", err)
+		return nil, fmt.Errorf(
+			"seek segment file: %w",
+			err,
+		)
 	}
 
-	data = make([]byte, rd.Pointer.Length)
-	if _, err = io.ReadFull(s.file, data); err != nil {
-		return nil, fmt.Errorf("read segment file: %w", err)
+	data := make([]byte, rd.Pointer.Length)
+	if _, err := io.ReadFull(s.file, data); err != nil {
+		return nil, fmt.Errorf(
+			"read segment file: %w",
+			err,
+		)
 	}
 
-	return
+	return data, nil
 }
 
 func (s *segment) Close() error {

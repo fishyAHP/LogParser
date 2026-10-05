@@ -1,7 +1,10 @@
 package storage
 
 import (
+	"encoding/binary"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -175,15 +178,16 @@ func (s *Storage) rotationSegment() error {
 	return nil
 }
 
-func (s *Storage) Iterator() *Iterator {
-
-}
+//func (s *Storage) Iterator() *Iterator {
+//
+//}
 
 type Iterator struct {
 	storage *Storage
 
 	segmentId uint32
 	offset    uint64
+	file      *os.File
 
 	data   []byte
 	record domain.RecordData
@@ -192,10 +196,63 @@ type Iterator struct {
 }
 
 func (i *Iterator) Next() bool {
-	if i.err != nil {
+	dir := i.storage.dir
+
+	curID := i.segmentId
+	curOffset := i.offset
+	if i.segmentId == 0 {
+		curID = 1
+		curOffset = uint64(len(Magic))
+	}
+	seg, err := newSegment(dir, curID)
+	defer func() {
+		i.err = nil
+		if err != nil {
+			i.err = err
+		}
+
+		_ = seg.Close()
+	}()
+
+	buf := make([]byte, RecordHeaderSize)
+	if _, err = seg.file.ReadAt(buf, int64(curOffset)); err != nil {
+		if errors.Is(err, io.EOF) {
+			err = seg.Close()
+			i.segmentId++
+			i.file = nil
+			return true
+		}
 		return false
 	}
 
+	length := binary.BigEndian.Uint32(buf[0:4])
+	recordID := binary.BigEndian.Uint64(buf[4:])
+
+	buf = make([]byte, length)
+
+	curOffset += uint64(RecordHeaderSize)
+	if _, err = seg.file.ReadAt(
+		buf,
+		int64(curOffset),
+	); err != nil {
+		return false
+	}
+
+	i.segmentId = curID
+	i.offset = curOffset + uint64(length)
+
+	i.data = buf
+	i.record = domain.RecordData{
+		ID: recordID,
+		Pointer: domain.RecordPointer{
+			Offset:    curOffset,
+			Length:    length,
+			SegmentID: curID,
+			Path:      dir,
+		},
+	}
+
+	return true
 }
 
 func (i *Iterator) Data() []byte {
