@@ -1,7 +1,10 @@
 package app
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
+	"io"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
 	"fishyAHP/LogParser.git/internal/features/index"
@@ -59,6 +62,31 @@ func (s *Service) Ingest(raw []byte) error {
 		return fmt.Errorf("indexing log: %w", err)
 	}
 
+	return nil
+}
+
+func (s *Service) IngestReader(reader io.Reader) error {
+	scanner := bufio.NewScanner(reader)
+	scanner.Buffer(
+		make([]byte, 4*storage.KByte),
+		int(storage.MByte),
+	)
+
+	for scanner.Scan() {
+		raw := bytes.Clone(scanner.Bytes())
+
+		if len(bytes.TrimSpace(raw)) == 0 {
+			continue
+		}
+
+		if err := s.Ingest(raw); err != nil {
+			return fmt.Errorf("ingest record: %w", err)
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("scanner error: %w", err)
+	}
 	return nil
 }
 

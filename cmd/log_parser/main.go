@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"os"
 	"strings"
 
@@ -19,9 +20,8 @@ func main() {
 			log.Fatal(err)
 		}
 	}()
-	err := c.Run()
 
-	if err != nil {
+	if err := c.Run(); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -37,24 +37,9 @@ func New(in io.Reader, out io.Writer) *Cli {
 		Separator: ',',
 		Parameters: []domain.Field{
 			{
-				Name:      "timestamp",
-				FieldType: domain.TimeType,
-				IndexType: domain.RangeIndex,
-			},
-			{
 				Name:      "level",
 				FieldType: domain.StringType,
 				IndexType: domain.HashIndex,
-			},
-			{
-				Name:      "pid",
-				FieldType: domain.IntType,
-				IndexType: domain.RangeIndex,
-			},
-			{
-				Name:      "message",
-				FieldType: domain.StringType,
-				IndexType: domain.TextIndex,
 			},
 		},
 	},
@@ -97,6 +82,10 @@ func (c *Cli) execute(line string) (bool, error) {
 	switch strings.ToLower(command) {
 	case "ingest":
 		return false, c.ingest(argument)
+	case "ingest-file":
+		return false, c.ingestFile(argument)
+	case "ingest-tcp":
+		return false, c.ingestTCP(argument)
 	case "query":
 		return false, c.query(argument)
 	case "exit":
@@ -120,6 +109,43 @@ func (c *Cli) ingest(raw string) error {
 		return fmt.Errorf("ingest: %w", err)
 	}
 	return nil
+}
+
+func (c *Cli) ingestFile(path string) error {
+	file, err := os.Open(path)
+	if err != nil {
+		return fmt.Errorf(
+			"open file %s: %w",
+			path,
+			err,
+		)
+	}
+	defer func() {
+		if err = file.Close(); err != nil {
+			log.Fatal(err)
+		}
+	}()
+
+	return c.service.IngestReader(file)
+}
+
+func (c *Cli) ingestTCP(address string) error {
+	conn, err := net.Dial("tcp", address)
+	if err != nil {
+		return fmt.Errorf(
+			"connect to %s: %w",
+			address,
+			err,
+		)
+	}
+
+	defer func() {
+		if err = conn.Close(); err != nil {
+			log.Fatal(err)
+		}
+	}()
+
+	return c.service.IngestReader(conn)
 }
 
 func (c *Cli) query(query string) error {
