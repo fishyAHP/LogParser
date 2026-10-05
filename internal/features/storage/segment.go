@@ -174,7 +174,7 @@ func (s *segment) Write(data []byte, recordID uint64) (domain.RecordPointer, err
 	pointer := domain.RecordPointer{
 		Offset:    uint64(s.size + RecordHeaderSize),
 		Length:    uint32(len(data)),
-		SegmentID: recordID,
+		SegmentID: s.ID,
 		Path:      filepath.Dir(s.file.Name()),
 	}
 	s.size += FileSize(n)
@@ -184,7 +184,7 @@ func (s *segment) Write(data []byte, recordID uint64) (domain.RecordPointer, err
 
 func (s *segment) Read(pointer domain.RecordPointer) ([]byte, error) {
 	if s.ID != pointer.SegmentID {
-		return nil, errors.New("segment read: not suitable record data")
+		return nil, errors.New("not suitable record data")
 	}
 
 	if _, err := s.file.Seek(
@@ -210,7 +210,7 @@ func (s *segment) Read(pointer domain.RecordPointer) ([]byte, error) {
 
 func (s *segment) Close() error {
 	if err := s.file.Close(); err != nil {
-		return fmt.Errorf("close segment file: %w", err)
+		return fmt.Errorf("close file: %w", err)
 	}
 
 	s.ID = 0

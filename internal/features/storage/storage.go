@@ -122,12 +122,12 @@ func (s *Storage) read(pointer domain.RecordPointer) (data []byte, err error) {
 	}
 
 	if err = s.openPointer(pointer); err != nil {
-		return nil, fmt.Errorf("read storage: %w", err)
+		return nil, fmt.Errorf("open pointer: %w", err)
 	}
 
 	data, err = s.readSegment.Read(pointer)
 	if err != nil {
-		return nil, fmt.Errorf("read storage: %w", err)
+		return nil, fmt.Errorf("read segment: %w", err)
 	}
 
 	return
