@@ -1,7 +1,11 @@
 package app
 
 import (
+	"bufio"
+	"bytes"
+	"errors"
 	"fmt"
+	"io"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
 	"fishyAHP/LogParser.git/internal/features/index"
@@ -22,25 +26,106 @@ func NewService(
 	format domain.Format,
 	storagePath string,
 ) (*Service, error) {
+	service, err := newService(
+		scheme,
+		format,
+		storagePath,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return service, nil
+}
+
+var ErrIndexRebuild = errors.New("rebuild indexes")
+
+func newService(
+	scheme *domain.Scheme,
+	format domain.Format,
+	storagePath string,
+) (*Service, error) {
 	idx, err := index.New(scheme)
 	if err != nil {
-		return nil, fmt.Errorf("new index: %w", err)
+		return nil, fmt.Errorf(
+			"new index: %w",
+			err,
+		)
 	}
 
 	store, err := storage.New(storagePath)
 	if err != nil {
-		return nil, fmt.Errorf("new storage: %w", err)
+		return nil, fmt.Errorf(
+			"new storage: %w",
+			err,
+		)
 	}
 
 	executor := query.NewExecutor(idx)
 	parser := parse.NewParser(scheme, format)
 
-	return &Service{
-		index:    idx,
-		executor: executor,
+	service := &Service{
 		parser:   parser,
 		store:    store,
-	}, nil
+		index:    idx,
+		executor: executor,
+	}
+
+	if err = service.rebuildIndexes(); err != nil {
+		_ = store.Close()
+		return nil, fmt.Errorf(
+			"%w: %w",
+			ErrIndexRebuild,
+			err,
+		)
+	}
+
+	return service, nil
+}
+
+func (s *Service) RebuildIndexes() error {
+	s.index.Clear()
+
+	if err := s.rebuildIndexes(); err != nil {
+		return fmt.Errorf(
+			"%w: %w",
+			ErrIndexRebuild,
+			err,
+		)
+	}
+	return nil
+}
+
+func (s *Service) rebuildIndexes() error {
+	iter := s.store.Iterator()
+	for iter.Next() {
+		data := iter.Data()
+
+		entry, err := s.parser.Parse(data)
+		if err != nil {
+			return fmt.Errorf(
+				"parse iter data: %w",
+				err,
+			)
+		}
+
+		if err := s.index.Index(
+			iter.Record(),
+			entry,
+		); err != nil {
+			return fmt.Errorf(
+				"indexing record: %w",
+				err,
+			)
+		}
+
+	}
+
+	if err := iter.Err(); err != nil {
+		return fmt.Errorf("iterator err: %w", err)
+	}
+
+	return nil
 }
 
 func (s *Service) Ingest(raw []byte) error {
@@ -59,6 +144,31 @@ func (s *Service) Ingest(raw []byte) error {
 		return fmt.Errorf("indexing log: %w", err)
 	}
 
+	return nil
+}
+
+func (s *Service) IngestReader(reader io.Reader) error {
+	scanner := bufio.NewScanner(reader)
+	scanner.Buffer(
+		make([]byte, 4*storage.KByte),
+		int(storage.MByte),
+	)
+
+	for scanner.Scan() {
+		raw := bytes.Clone(scanner.Bytes())
+
+		if len(bytes.TrimSpace(raw)) == 0 {
+			continue
+		}
+
+		if err := s.Ingest(raw); err != nil {
+			return fmt.Errorf("ingest record: %w", err)
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("scanner error: %w", err)
+	}
 	return nil
 }
 

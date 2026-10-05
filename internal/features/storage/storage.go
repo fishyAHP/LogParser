@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,23 +14,21 @@ import (
 // Storage это описание системы управления сегментами, или файлами,
 // в которые записываются логи или откуда они читаются.
 type Storage struct {
-	dir string
+	dir     string
+	records uint64
 
 	readSegment  *segment
 	writeSegment *segment
 
 	readMtx  sync.Mutex
 	writeMtx sync.Mutex
+
+	closed bool
 }
 
-// New создает или открывает директорию, затем находит последний сегмент.
-// После этого определяет его как активный, в случае если он не заполнен слишком сильно.
-// Если сегментов нет, то создает новый.
-// Если размер последнего сегмента больше максимального заданного значения, то надо создать новый.
+var ErrClosedStorage = errors.New("closed storage")
+
 func New(path string) (*Storage, error) {
-	// os.MkdirAll открывает нужную директорию или создает все директории на указанном пути,
-	// если их не было. Права дает создателю все возможности, а остальным возможность читать
-	// и выполнять
 	err := os.MkdirAll(path, 0o755)
 	if err != nil {
 		return nil, fmt.Errorf("mk dir all: %w", err)
@@ -80,16 +79,22 @@ func (s *Storage) Write(data []byte) (*domain.RecordData, error) {
 	s.writeMtx.Lock()
 	defer s.writeMtx.Unlock()
 
+	if s.closed {
+		return nil, ErrClosedStorage
+	}
+
 	if s.writeSegment.isOverloaded(FileSize(len(data))) {
 		if err := s.rotationSegment(); err != nil {
 			return nil, fmt.Errorf("write segment: %w", err)
 		}
 	}
 
-	rd, err := s.writeSegment.Write(data)
+	rd, err := s.writeSegment.Write(data, s.records+1)
 	if err != nil {
 		return nil, fmt.Errorf("write segment: %w", err)
 	}
+
+	s.records++
 
 	return rd, nil
 }
@@ -97,6 +102,9 @@ func (s *Storage) Write(data []byte) (*domain.RecordData, error) {
 func (s *Storage) Read(pointer *domain.RecordData) (data []byte, err error) {
 	s.readMtx.Lock()
 	defer s.readMtx.Unlock()
+	if s.closed {
+		return nil, ErrClosedStorage
+	}
 
 	if err = s.openPointer(pointer); err != nil {
 		return nil, fmt.Errorf("read storage: %w", err)
@@ -128,6 +136,9 @@ func (s *Storage) Close() error {
 			return fmt.Errorf("close write segment: %w", err)
 		}
 	}
+
+	s.records = 0
+	s.closed = true
 
 	return nil
 }
@@ -166,11 +177,17 @@ func (s *Storage) rotationSegment() error {
 		s.dir,
 		oldID+1,
 	)
-	// Узкое место, если тут будет ошибка, то у нас останется только закрытый сегмент для записи
+	// TODO если тут будет ошибка, то у нас останется только закрытый сегмент для записи
 	if err != nil {
 		return fmt.Errorf("rotation segment: %w", err)
 	}
 
 	s.writeSegment = newWriter
 	return nil
+}
+
+func (s *Storage) Iterator() *Iterator {
+	return &Iterator{
+		storage: s,
+	}
 }
