@@ -14,8 +14,9 @@ import (
 // Storage это описание системы управления сегментами, или файлами,
 // в которые записываются логи или откуда они читаются.
 type Storage struct {
-	dir     string
-	records uint64
+	dir          string
+	recordsCount uint64
+	records      map[domain.RecordID]domain.RecordPointer
 
 	readSegment  *segment
 	writeSegment *segment
@@ -26,7 +27,10 @@ type Storage struct {
 	closed bool
 }
 
-var ErrClosedStorage = errors.New("closed storage")
+var (
+	ErrClosedStorage  = errors.New("closed storage")
+	ErrRecordNotFound = errors.New("record not found")
+)
 
 func New(path string) (*Storage, error) {
 	err := os.MkdirAll(path, 0o755)
@@ -53,7 +57,7 @@ func New(path string) (*Storage, error) {
 		}
 	}
 
-	writer, err := newSegment(path, uint32(id))
+	writer, err := newSegment(path, uint64(id))
 	if err != nil {
 		return nil, fmt.Errorf("create new writer: %w", err)
 	}
@@ -63,43 +67,54 @@ func New(path string) (*Storage, error) {
 			return nil, fmt.Errorf("close old writer: %w", err)
 		}
 
-		if writer, err = newSegment(path, uint32(id+1)); err != nil {
+		if writer, err = newSegment(path, uint64(id+1)); err != nil {
 			return nil, fmt.Errorf("create not overloaded writer: %w", err)
 		}
 	}
 
 	return &Storage{
 		dir:          path,
+		records:      make(map[domain.RecordID]domain.RecordPointer),
 		writeSegment: writer,
 		readSegment:  &segment{},
 	}, nil
 }
 
-func (s *Storage) Write(data []byte) (*domain.RecordData, error) {
+func (s *Storage) Write(data []byte) (domain.RecordID, error) {
 	s.writeMtx.Lock()
 	defer s.writeMtx.Unlock()
 
 	if s.closed {
-		return nil, ErrClosedStorage
+		return 0, ErrClosedStorage
 	}
 
 	if s.writeSegment.isOverloaded(FileSize(len(data))) {
 		if err := s.rotationSegment(); err != nil {
-			return nil, fmt.Errorf("write segment: %w", err)
+			return 0, fmt.Errorf("write segment: %w", err)
 		}
 	}
 
-	rd, err := s.writeSegment.Write(data, s.records+1)
+	pointer, err := s.writeSegment.Write(data, s.recordsCount+1)
 	if err != nil {
-		return nil, fmt.Errorf("write segment: %w", err)
+		return 0, fmt.Errorf("write segment: %w", err)
 	}
 
-	s.records++
+	s.recordsCount++
+	s.records[domain.RecordID(s.recordsCount)] = pointer
 
-	return rd, nil
+	return domain.RecordID(s.recordsCount), nil
 }
 
-func (s *Storage) Read(pointer *domain.RecordData) (data []byte, err error) {
+func (s *Storage) ReadByID(id domain.RecordID) ([]byte, error) {
+	pointer, ok := s.records[id]
+	if !ok {
+		return nil, ErrRecordNotFound
+	}
+
+	return s.read(pointer)
+}
+
+func (s *Storage) read(pointer domain.RecordPointer) (data []byte, err error) {
 	s.readMtx.Lock()
 	defer s.readMtx.Unlock()
 	if s.closed {
@@ -137,16 +152,16 @@ func (s *Storage) Close() error {
 		}
 	}
 
-	s.records = 0
+	s.recordsCount = 0
 	s.closed = true
 
 	return nil
 }
 
-func (s *Storage) openPointer(pointer *domain.RecordData) error {
+func (s *Storage) openPointer(pointer domain.RecordPointer) error {
 	if s.readSegment.IsOpen() {
 		if filepath.Join(s.dir, strconv.Itoa(int(s.readSegment.ID))) ==
-			filepath.Join(pointer.Pointer.Path, strconv.Itoa(int(pointer.Pointer.SegmentID))) {
+			filepath.Join(pointer.Path, strconv.Itoa(int(pointer.SegmentID))) {
 			return nil
 		}
 
@@ -156,8 +171,8 @@ func (s *Storage) openPointer(pointer *domain.RecordData) error {
 	}
 
 	newReader, err := newSegment(
-		pointer.Pointer.Path,
-		pointer.Pointer.SegmentID,
+		pointer.Path,
+		pointer.SegmentID,
 	)
 	if err != nil {
 		return fmt.Errorf("open pointer: %w", err)

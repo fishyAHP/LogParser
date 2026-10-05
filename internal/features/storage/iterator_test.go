@@ -39,7 +39,7 @@ func TestIterator_Next(t *testing.T) {
 	}
 
 	if len(got) != len(logs) {
-		t.Fatalf("expected %d records, got %d", len(logs), len(got))
+		t.Fatalf("expected %d recordsCount, got %d", len(logs), len(got))
 	}
 
 	for j := range logs {

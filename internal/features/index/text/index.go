@@ -14,7 +14,7 @@ type Index struct {
 	invert    invertIndex
 	Tokenizer *words.Tokenizer
 }
-type invertIndex = map[words.Token]*set.Set[domain.RecordData]
+type invertIndex = map[words.Token]*set.Set[domain.RecordID]
 
 func New() *Index {
 	return &Index{
@@ -23,7 +23,7 @@ func New() *Index {
 	}
 }
 
-func (i *Index) Search(value domain.Value) (*set.Set[domain.RecordData], error) {
+func (i *Index) Search(value domain.Value) (*set.Set[domain.RecordID], error) {
 	strVal, ok := value.(domain.StringValue)
 	if !ok {
 		return nil, common.ErrInvalidType
@@ -36,7 +36,7 @@ func (i *Index) Search(value domain.Value) (*set.Set[domain.RecordData], error) 
 	return res.Clone(), nil
 }
 
-func (i *Index) Add(value domain.Value, record domain.RecordData) error {
+func (i *Index) Add(value domain.Value, record domain.RecordID) error {
 	strVal, ok := value.(domain.StringValue)
 	if !ok {
 		return common.ErrInvalidType
@@ -49,7 +49,7 @@ func (i *Index) Add(value domain.Value, record domain.RecordData) error {
 
 	for _, token := range tokens {
 		if _, ok := i.invert[token]; !ok {
-			i.invert[token] = set.New[domain.RecordData](1)
+			i.invert[token] = set.New[domain.RecordID](1)
 		}
 
 		if i.invert[token].Add(record) {
@@ -60,9 +60,9 @@ func (i *Index) Add(value domain.Value, record domain.RecordData) error {
 	return nil
 }
 
-func (i *Index) get(s string) *set.Set[domain.RecordData] {
+func (i *Index) get(s string) *set.Set[domain.RecordID] {
 	tokens := i.Tokenizer.Tokenize(s)
-	sets := make([]*set.Set[domain.RecordData], 0, len(tokens))
+	sets := make([]*set.Set[domain.RecordID], 0, len(tokens))
 
 	for _, token := range tokens {
 		if sett, ok := i.invert[token]; ok {
@@ -72,7 +72,7 @@ func (i *Index) get(s string) *set.Set[domain.RecordData] {
 		}
 	}
 
-	slices.SortFunc(sets, func(a, b *set.Set[domain.RecordData]) int {
+	slices.SortFunc(sets, func(a, b *set.Set[domain.RecordID]) int {
 		if a.Len() > b.Len() {
 			return 1
 		}
@@ -86,7 +86,7 @@ func (i *Index) get(s string) *set.Set[domain.RecordData] {
 		return nil
 	}
 	start := 1
-	res := set.New[domain.RecordData](sets[0].Len())
+	res := set.New[domain.RecordID](sets[0].Len())
 	res.AddMany(sets[0].Slice()...)
 
 	for j := start; j < len(sets); j++ {
@@ -102,7 +102,7 @@ func (i *Index) get(s string) *set.Set[domain.RecordData] {
 
 func (i *Index) Remove(
 	s domain.Value,
-	data domain.RecordData) error {
+	data domain.RecordID) error {
 	keys, ok := s.(domain.StringValue)
 	if !ok {
 		return common.ErrInvalidType

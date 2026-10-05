@@ -56,7 +56,7 @@ func newFieldIndex(field domain.Field) (common.Index, error) {
 }
 
 func (s *Service) Index(
-	record domain.RecordData,
+	record domain.RecordID,
 	entry domain.LogEntry,
 ) error {
 	if len(entry.Values) != len(s.Scheme.Parameters) {
@@ -85,7 +85,7 @@ func (s *Service) Index(
 func (s *Service) Exact(
 	fieldName string,
 	value domain.Value,
-) (*set.Set[domain.RecordData], error) {
+) (*set.Set[domain.RecordID], error) {
 	idx, ok := s.indexes[fieldName]
 	if !ok {
 		return nil, ErrIndexNotFound
@@ -110,7 +110,7 @@ func (s *Service) Exact(
 func (s *Service) Range(
 	fieldName string,
 	from, to *common.Bound,
-) (*set.Set[domain.RecordData], error) {
+) (*set.Set[domain.RecordID], error) {
 	idx, ok := s.indexes[fieldName]
 	if !ok {
 		return nil, ErrIndexNotFound

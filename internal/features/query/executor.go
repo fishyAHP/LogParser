@@ -29,7 +29,7 @@ func NewExecutor(indexes *index.Service) *Executor {
 
 func (e *Executor) Execute(
 	s string,
-) (*set.Set[domain.RecordData], error) {
+) (*set.Set[domain.RecordID], error) {
 	expr, err := e.syntax.Query(s)
 	if err != nil {
 		return nil, fmt.Errorf(
@@ -58,7 +58,7 @@ func (e *Executor) Execute(
 
 func (e *Executor) executeExpr(
 	typedExpr TypedExpr,
-) (*set.Set[domain.RecordData], error) {
+) (*set.Set[domain.RecordID], error) {
 	switch ex := typedExpr.(type) {
 	case *TypedBinaryExpr:
 		left, err := e.executeExpr(ex.Left)

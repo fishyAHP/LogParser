@@ -31,7 +31,7 @@ func newRBTree[K common.Key](comparator func(K, K) int) *rbTree[K] {
 
 func (t *rbTree[K]) insert(
 	key K,
-	value domain.RecordData,
+	value domain.RecordID,
 ) (err error) {
 	if t.elemsCount < 1 {
 		t.root = newNode(key, value)
@@ -194,11 +194,11 @@ func (t *rbTree[K]) rightRotate(n *node[K]) {
 	n.right = parent
 }
 
-// find return []domain.RecordData,
-// because if it will return domain.RecordData, it changes
+// find return []domain.RecordID,
+// because if it will return domain.RecordID, it changes
 // from O(log n) to O(n). Also this func return bool which means
 // if true, it founded key, another not yet.
-func (t *rbTree[K]) find(key K) (*set.Set[domain.RecordData], bool) {
+func (t *rbTree[K]) find(key K) (*set.Set[domain.RecordID], bool) {
 	cur := t.root
 
 	for cur != nil {
@@ -217,8 +217,8 @@ func (t *rbTree[K]) find(key K) (*set.Set[domain.RecordData], bool) {
 	return nil, false
 }
 
-func (t *rbTree[K]) innerRange(from, to *localBound[K]) ([]domain.RecordData, bool) {
-	result := make([]domain.RecordData, 0)
+func (t *rbTree[K]) innerRange(from, to *localBound[K]) ([]domain.RecordID, bool) {
+	result := make([]domain.RecordID, 0)
 	result = t.rangeSearch(t.root, from, to, result)
 
 	if len(result) == 0 {
@@ -230,8 +230,8 @@ func (t *rbTree[K]) innerRange(from, to *localBound[K]) ([]domain.RecordData, bo
 func (t *rbTree[K]) rangeSearch(
 	n *node[K],
 	from, to *localBound[K],
-	res []domain.RecordData,
-) []domain.RecordData {
+	res []domain.RecordID,
+) []domain.RecordID {
 	if n == nil {
 		return res
 	}
@@ -315,6 +315,6 @@ func (t *rbTree[K]) clear() {
 	t.nodesCount = 0
 }
 
-func (t *rbTree[K]) remove(key K, value domain.RecordData) bool {
+func (t *rbTree[K]) remove(key K, value domain.RecordID) bool {
 	return false
 }

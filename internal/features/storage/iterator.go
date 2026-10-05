@@ -14,12 +14,12 @@ import (
 type Iterator struct {
 	storage *Storage
 
-	segmentID uint32
+	segmentID uint64
 	offset    uint64
 	file      *os.File
 
 	data   []byte
-	record domain.RecordData
+	record domain.RecordID
 
 	err  error
 	done bool
@@ -101,24 +101,22 @@ func (i *Iterator) Next() bool {
 	i.offset = curOffset + uint64(length)
 
 	i.data = buf
-	i.record = domain.RecordData{
-		ID: recordID,
-		Pointer: domain.RecordPointer{
-			Offset:    curOffset,
-			Length:    length,
-			SegmentID: curID,
-			Path:      dir,
-		},
-	}
+	i.record = domain.RecordID(recordID)
 
-	if i.record.ID > i.storage.records {
-		i.storage.records = i.record.ID
+	if recordID > i.storage.recordsCount {
+		i.storage.recordsCount = recordID
+	}
+	i.storage.records[i.record] = domain.RecordPointer{
+		Offset:    curOffset,
+		Length:    length,
+		SegmentID: curID,
+		Path:      dir,
 	}
 
 	return true
 }
 
-func openFile(dir string, curID uint32) (*os.File, error) {
+func openFile(dir string, curID uint64) (*os.File, error) {
 	path := filepath.Join(
 		dir,
 		fmt.Sprintf(
@@ -141,7 +139,7 @@ func (i *Iterator) Data() []byte {
 	return i.data
 }
 
-func (i *Iterator) Record() domain.RecordData {
+func (i *Iterator) Record() domain.RecordID {
 	return i.record
 }
 

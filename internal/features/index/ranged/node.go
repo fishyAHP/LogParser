@@ -14,7 +14,7 @@ const (
 
 type node[K comparable] struct {
 	key     K
-	records *set.Set[domain.RecordData]
+	records *set.Set[domain.RecordID]
 
 	left, right *node[K]
 	parent      *node[K]
@@ -22,8 +22,8 @@ type node[K comparable] struct {
 	color color
 }
 
-func newNode[K comparable](key K, value domain.RecordData) *node[K] {
-	s := set.New[domain.RecordData](0)
+func newNode[K comparable](key K, value domain.RecordID) *node[K] {
+	s := set.New[domain.RecordID](0)
 	s.Add(value)
 
 	return &node[K]{
@@ -33,7 +33,7 @@ func newNode[K comparable](key K, value domain.RecordData) *node[K] {
 	}
 }
 
-func (n *node[K]) add(value domain.RecordData) bool {
+func (n *node[K]) add(value domain.RecordID) bool {
 	return n.records.Add(value)
 }
 

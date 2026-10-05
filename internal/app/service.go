@@ -140,7 +140,7 @@ func (s *Service) Ingest(raw []byte) error {
 		return fmt.Errorf("storage write: %w", err)
 	}
 
-	if err = s.index.Index(*record, logentry); err != nil {
+	if err = s.index.Index(record, logentry); err != nil {
 		return fmt.Errorf("indexing log: %w", err)
 	}
 
@@ -181,11 +181,11 @@ func (s *Service) Query(q string) ([][]byte, error) {
 	sl := records.Slice()
 	res := make([][]byte, 0, len(sl))
 	for _, record := range sl {
-		data, err := s.store.Read(&record)
+		data, err := s.store.ReadByID(record)
 		if err != nil {
 			return nil, fmt.Errorf(
 				"read record %v: %w",
-				record.ID,
+				record,
 				err,
 			)
 		}

@@ -7,6 +7,8 @@ import (
 	"log"
 	"net"
 	"os"
+	"runtime"
+	"runtime/pprof"
 	"strings"
 
 	"fishyAHP/LogParser.git/internal/app"
@@ -22,9 +24,24 @@ func main() {
 		}
 	}()
 
+	if err := writeHeapProfile("heap.pprof"); err != nil {
+		log.Fatal(err)
+	}
 	if err := c.Run(); err != nil {
 		log.Fatal(err)
 	}
+}
+
+func writeHeapProfile(path string) error {
+	runtime.GC()
+
+	f, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	return pprof.WriteHeapProfile(f)
 }
 
 type Cli struct {
