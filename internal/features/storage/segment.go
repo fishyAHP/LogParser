@@ -41,7 +41,6 @@ type segment struct {
 	file *os.File
 }
 
-var Records uint64 = 0
 var Magic = []byte{'L', 'G', 'P', 'R', 'S', 'R'}
 
 // newSegment создает/открывает файл, дает ему номер/название,
@@ -153,11 +152,11 @@ const (
 	RecordHeaderSize = RecordLengthSize + RecordIdSize
 )
 
-func (s *segment) Write(data []byte) (*domain.RecordData, error) {
+func (s *segment) Write(data []byte, recordID uint64) (*domain.RecordData, error) {
 	header := make([]byte, RecordHeaderSize)
 
 	binary.BigEndian.PutUint32(header[0:4], uint32(len(data)))
-	binary.BigEndian.PutUint64(header[4:12], Records+1)
+	binary.BigEndian.PutUint64(header[4:12], recordID)
 
 	buf := make([]byte, 0, int(RecordHeaderSize)+len(data))
 	buf = append(buf, header...)
@@ -172,12 +171,11 @@ func (s *segment) Write(data []byte) (*domain.RecordData, error) {
 		return nil, io.ErrShortWrite
 	}
 
-	Records++
 	rd := domain.NewRecordData(
 		uint32(len(data)),
 		s.ID,
 		uint64(s.size+RecordHeaderSize),
-		Records,
+		recordID,
 		filepath.Dir(s.file.Name()),
 	)
 	s.size += FileSize(n)

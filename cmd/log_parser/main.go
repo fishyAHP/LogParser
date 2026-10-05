@@ -42,6 +42,11 @@ func New(in io.Reader, out io.Writer) *Cli {
 				FieldType: domain.StringType,
 				IndexType: domain.HashIndex,
 			},
+			{
+				Name:      "pid",
+				FieldType: domain.IntType,
+				IndexType: domain.RangeIndex,
+			},
 		},
 	},
 		domain.JSON,
@@ -187,8 +192,4 @@ func (c *Cli) query(query string) error {
 
 	fmt.Fprintf(c.out, "%d results\n", len(logs))
 	return nil
-}
-
-func (c *Cli) rebuildIndex() error {
-
 }

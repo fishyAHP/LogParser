@@ -18,7 +18,7 @@ func TestSegment_WriteRead(t *testing.T) {
 
 	want := []byte(`{"level":"INFO","message":"hello"}`)
 
-	record, err := seg.Write(want)
+	record, err := seg.Write(want, 1)
 	if err != nil {
 		t.Fatalf("Write: %v", err)
 	}
@@ -62,8 +62,8 @@ func TestSegment_WriteReadMultiple(t *testing.T) {
 
 	records := make([]*domain.RecordData, 0, len(input))
 
-	for _, data := range input {
-		record, err := seg.Write(data)
+	for i, data := range input {
+		record, err := seg.Write(data, uint64(i+1))
 		if err != nil {
 			t.Fatalf("Write: %v", err)
 		}
