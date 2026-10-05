@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -112,6 +113,10 @@ func (c *Cli) ingest(raw string) error {
 }
 
 func (c *Cli) ingestFile(path string) error {
+	if strings.TrimSpace(path) == "" {
+		return errors.New("expected path file")
+	}
+
 	file, err := os.Open(path)
 	if err != nil {
 		return fmt.Errorf(
@@ -126,10 +131,21 @@ func (c *Cli) ingestFile(path string) error {
 		}
 	}()
 
-	return c.service.IngestReader(file)
+	if err = c.service.IngestReader(file); err != nil {
+		return fmt.Errorf(
+			"ingest file %s: %w",
+			path,
+			err,
+		)
+	}
+	return nil
 }
 
 func (c *Cli) ingestTCP(address string) error {
+	if strings.TrimSpace(address) == "" {
+		return errors.New("expected tcp address")
+	}
+
 	conn, err := net.Dial("tcp", address)
 	if err != nil {
 		return fmt.Errorf(
@@ -145,7 +161,14 @@ func (c *Cli) ingestTCP(address string) error {
 		}
 	}()
 
-	return c.service.IngestReader(conn)
+	if err = c.service.IngestReader(conn); err != nil {
+		return fmt.Errorf(
+			"ingest TCP %q: %w",
+			address,
+			err,
+		)
+	}
+	return nil
 }
 
 func (c *Cli) query(query string) error {
