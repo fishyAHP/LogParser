@@ -36,7 +36,7 @@ func (f FileSize) String() string {
 
 // segment представляет собой файл, в который сейчас происходит запись
 type segment struct {
-	ID   uint32
+	ID   uint64
 	size FileSize
 	file *os.File
 }
@@ -46,7 +46,7 @@ var Magic = []byte{'L', 'G', 'P', 'R', 'S', 'R'}
 // newSegment создает/открывает файл, дает ему номер/название,
 // если его не было.
 // Также определяет его текущий размер.
-func newSegment(dir string, id uint32) (*segment, error) {
+func newSegment(dir string, id uint64) (*segment, error) {
 	// filepath.Join конкатенирует несколько строк в файловый путь.
 	// После того как сделаем интеграцию парсера и хранилища уберем эту обработку туда
 	path := filepath.Join(
@@ -152,7 +152,7 @@ const (
 	RecordHeaderSize = RecordLengthSize + RecordIdSize
 )
 
-func (s *segment) Write(data []byte, recordID uint64) (*domain.RecordData, error) {
+func (s *segment) Write(data []byte, recordID uint64) (domain.RecordPointer, error) {
 	header := make([]byte, RecordHeaderSize)
 
 	binary.BigEndian.PutUint32(header[0:4], uint32(len(data)))
@@ -164,32 +164,31 @@ func (s *segment) Write(data []byte, recordID uint64) (*domain.RecordData, error
 
 	n, err := s.file.Write(buf)
 	if err != nil {
-		return &domain.RecordData{},
+		return domain.RecordPointer{},
 			fmt.Errorf("write segment file: %w", err)
 	}
 	if n != len(buf) {
-		return nil, io.ErrShortWrite
+		return domain.RecordPointer{}, io.ErrShortWrite
 	}
 
-	rd := domain.NewRecordData(
-		uint32(len(data)),
-		s.ID,
-		uint64(s.size+RecordHeaderSize),
-		recordID,
-		filepath.Dir(s.file.Name()),
-	)
+	pointer := domain.RecordPointer{
+		Offset:    uint64(s.size + RecordHeaderSize),
+		Length:    uint32(len(data)),
+		SegmentID: recordID,
+		Path:      filepath.Dir(s.file.Name()),
+	}
 	s.size += FileSize(n)
 
-	return rd, nil
+	return pointer, nil
 }
 
-func (s *segment) Read(rd *domain.RecordData) ([]byte, error) {
-	if s.ID != rd.Pointer.SegmentID {
+func (s *segment) Read(pointer domain.RecordPointer) ([]byte, error) {
+	if s.ID != pointer.SegmentID {
 		return nil, errors.New("segment read: not suitable record data")
 	}
 
 	if _, err := s.file.Seek(
-		int64(rd.Pointer.Offset),
+		int64(pointer.Offset),
 		io.SeekStart,
 	); err != nil {
 		return nil, fmt.Errorf(
@@ -198,7 +197,7 @@ func (s *segment) Read(rd *domain.RecordData) ([]byte, error) {
 		)
 	}
 
-	data := make([]byte, rd.Pointer.Length)
+	data := make([]byte, pointer.Length)
 	if _, err := io.ReadFull(s.file, data); err != nil {
 		return nil, fmt.Errorf(
 			"read segment file: %w",

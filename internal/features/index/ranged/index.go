@@ -17,7 +17,7 @@ type localBound[K common.Key] struct {
 
 func (i *Index[K]) Range(
 	from, to *common.Bound,
-) (*set.Set[domain.RecordData], error) {
+) (*set.Set[domain.RecordID], error) {
 	var (
 		fromBound *localBound[K]
 		toBound   *localBound[K]
@@ -49,7 +49,7 @@ func (i *Index[K]) Range(
 		return nil, common.ErrNotFoundRecord
 	}
 
-	s := set.New[domain.RecordData](len(records))
+	s := set.New[domain.RecordID](len(records))
 	s.AddMany(records...)
 
 	return s, nil
@@ -57,7 +57,7 @@ func (i *Index[K]) Range(
 
 func (i *Index[K]) Exact(
 	value domain.Value,
-) (*set.Set[domain.RecordData], error) {
+) (*set.Set[domain.RecordID], error) {
 	key, ok := value.(K)
 	if !ok {
 		return nil, common.ErrInvalidType
@@ -72,7 +72,7 @@ func (i *Index[K]) Exact(
 
 func (i *Index[K]) Add(
 	value domain.Value,
-	record domain.RecordData,
+	record domain.RecordID,
 ) error {
 	key, ok := value.(K)
 	if !ok {
@@ -89,7 +89,7 @@ func New[K common.Key](comparator func(K, K) int) *Index[K] {
 
 func (i *Index[K]) Remove(
 	value domain.Value,
-	data domain.RecordData,
+	data domain.RecordID,
 ) error {
 	key, ok := value.(K)
 	if !ok {
@@ -103,7 +103,7 @@ func (i *Index[K]) Remove(
 	return nil
 }
 
-func (i *Index[K]) Min() *set.Set[domain.RecordData] {
+func (i *Index[K]) Min() *set.Set[domain.RecordID] {
 	if i.tree.len() == 0 {
 		return nil
 	}
@@ -116,7 +116,7 @@ func (i *Index[K]) Min() *set.Set[domain.RecordData] {
 	return minNode.records
 }
 
-func (i *Index[K]) Max() *set.Set[domain.RecordData] {
+func (i *Index[K]) Max() *set.Set[domain.RecordID] {
 	if i.tree.len() == 0 {
 		return nil
 	}

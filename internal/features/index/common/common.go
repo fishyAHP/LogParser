@@ -20,23 +20,23 @@ type Key interface {
 type Index interface {
 	Len() int
 	Clear()
-	Add(domain.Value, domain.RecordData) error
-	Remove(domain.Value, domain.RecordData) error
+	Add(domain.Value, domain.RecordID) error
+	Remove(domain.Value, domain.RecordID) error
 }
 
 type ExactIndex interface {
 	Index
-	Exact(domain.Value) (*set.Set[domain.RecordData], error)
+	Exact(domain.Value) (*set.Set[domain.RecordID], error)
 }
 
 type RangeIndex interface {
 	ExactIndex
-	Range(from, to *Bound) (*set.Set[domain.RecordData], error)
+	Range(from, to *Bound) (*set.Set[domain.RecordID], error)
 }
 
 type TextIndex interface {
 	Index
-	Search(domain.Value) (*set.Set[domain.RecordData], error)
+	Search(domain.Value) (*set.Set[domain.RecordID], error)
 }
 
 type Bound struct {
