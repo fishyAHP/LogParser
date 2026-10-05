@@ -174,3 +174,41 @@ func (s *Storage) rotationSegment() error {
 	s.writeSegment = newWriter
 	return nil
 }
+
+func (s *Storage) Iterator() *Iterator {
+
+}
+
+type Iterator struct {
+	storage *Storage
+
+	segmentId uint32
+	offset    uint64
+
+	data   []byte
+	record domain.RecordData
+
+	err error
+}
+
+func (i *Iterator) Next() bool {
+	if i.err != nil {
+		return false
+	}
+
+}
+
+func (i *Iterator) Data() []byte {
+	return i.data
+}
+
+func (i *Iterator) Record() domain.RecordData {
+	return i.record
+}
+
+func (i *Iterator) Err() error {
+	if i.err != nil {
+		return i.err
+	}
+	return nil
+}

@@ -188,3 +188,7 @@ func (c *Cli) query(query string) error {
 	fmt.Fprintf(c.out, "%d results\n", len(logs))
 	return nil
 }
+
+func (c *Cli) rebuildIndex() error {
+
+}

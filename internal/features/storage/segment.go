@@ -1,6 +1,8 @@
 package storage
 
 import (
+	"bytes"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -40,6 +42,7 @@ type segment struct {
 }
 
 var Records uint64 = 0
+var Magic = []byte{'L', 'G', 'P', 'R', 'S', 'R'}
 
 // newSegment создает/открывает файл, дает ему номер/название,
 // если его не было.
@@ -55,24 +58,51 @@ func newSegment(dir string, id uint32) (*segment, error) {
 	// os.OpenFile открывает нужный файл или создает если его не было,
 	// файл открывается для чтения и записи, в конце битовой маски флаг,
 	// что указатель записи в файл ставить в его конец.
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0o644)
+	file, err := os.OpenFile(
+		path,
+		os.O_CREATE|os.O_RDWR|os.O_APPEND,
+		0o644,
+	)
 	if err != nil {
-		return &segment{}, fmt.Errorf("open segment: %w", err)
+		return nil, fmt.Errorf("open segment: %w", err)
 	}
 
 	defer func() {
 		if err != nil {
-			errClose := file.Close()
-			if errClose != nil {
-				// когда сделаем логгер то вставим его сюда
-				return
-			}
+			_ = file.Close()
 		}
 	}()
 
 	stat, err := file.Stat()
 	if err != nil {
-		return &segment{}, fmt.Errorf("stat segment: %w", err)
+		return nil, fmt.Errorf(
+			"stat segment: %w",
+			err,
+		)
+	}
+
+	if stat.Size() == 0 {
+		if err = writeFileHeader(file); err != nil {
+			return nil, fmt.Errorf(
+				"write header: %w",
+				err,
+			)
+		}
+	} else {
+		if err = validateFileHeader(file); err != nil {
+			return nil, fmt.Errorf(
+				"validate header: %w",
+				err,
+			)
+		}
+	}
+
+	stat, err = file.Stat()
+	if err != nil {
+		return nil, fmt.Errorf(
+			"stat after header: %w",
+			err,
+		)
 	}
 
 	return &segment{
@@ -82,12 +112,58 @@ func newSegment(dir string, id uint32) (*segment, error) {
 	}, nil
 }
 
+func writeFileHeader(file *os.File) error {
+	n, err := file.WriteAt(Magic, 0)
+	if err != nil {
+		return fmt.Errorf("write magic: %w", err)
+	}
+	if n != len(Magic) {
+		return errors.New("corrupted write magic")
+	}
+
+	return nil
+}
+
+func validateFileHeader(file *os.File) error {
+	buf := make([]byte, len(Magic))
+	n, err := file.ReadAt(buf, 0)
+	if err != nil {
+		return fmt.Errorf(
+			"read magic: %w",
+			err,
+		)
+	}
+	if n != len(Magic) {
+		return errors.New("corrupted read magic")
+	}
+
+	if !bytes.Equal(buf, Magic) {
+		return errors.New("invalid file magic")
+	}
+	return nil
+}
+
 func (s *segment) isOverloaded(size FileSize) bool {
 	return float64(s.size+size)/float64(MaxSegmentSize) >= loadFactor
 }
 
+const (
+	lengthSize   = 4 * Byte
+	recordIdSize = 8 * Byte
+	headerSize   = lengthSize + recordIdSize
+)
+
 func (s *segment) Write(data []byte) (*domain.RecordData, error) {
-	n, err := s.file.Write(data)
+	header := make([]byte, headerSize)
+
+	binary.BigEndian.PutUint32(header[0:4], uint32(len(data)))
+	binary.BigEndian.PutUint64(header[4:12], Records+1)
+
+	buf := make([]byte, 0, int(headerSize)+len(data))
+	buf = append(buf, header...)
+	buf = append(buf, data...)
+
+	n, err := s.file.Write(buf)
 	if err != nil {
 		return &domain.RecordData{},
 			fmt.Errorf("write segment file: %w", err)
@@ -97,7 +173,7 @@ func (s *segment) Write(data []byte) (*domain.RecordData, error) {
 	rd := domain.NewRecordData(
 		uint32(n),
 		s.ID,
-		uint64(s.size),
+		uint64(s.size+headerSize),
 		Records,
 		filepath.Dir(s.file.Name()),
 	)
