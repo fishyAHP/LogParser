@@ -174,7 +174,7 @@ func (s *segment) Write(data []byte, recordID uint64) (domain.RecordPointer, err
 	pointer := domain.RecordPointer{
 		Offset:    uint64(s.size + RecordHeaderSize),
 		Length:    uint32(len(data)),
-		SegmentID: recordID,
+		SegmentID: s.ID,
 		Path:      filepath.Dir(s.file.Name()),
 	}
 	s.size += FileSize(n)
