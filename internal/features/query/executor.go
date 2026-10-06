@@ -1,6 +1,7 @@
 package query
 
 import (
+	"errors"
 	"fmt"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
@@ -49,7 +50,7 @@ func (e *Executor) Execute(
 	res, err := e.executeExpr(typedExpr)
 	if err != nil {
 		return nil, fmt.Errorf(
-			"executeExpr expression: %w",
+			"execute expression: %w",
 			err,
 		)
 	}
@@ -87,21 +88,51 @@ func (e *Executor) executeExpr(
 	case *TypedCondition:
 		switch ex.Operator {
 		case Equal:
-			return e.indexes.Exact(ex.Field, ex.Value)
+			res, err := e.indexes.Exact(ex.Field, ex.Value)
+			if err != nil {
+				if errors.Is(err, common.ErrNotFoundRecord) {
+					return &set.Set[domain.RecordID]{}, nil
+				}
+				return nil, fmt.Errorf(
+					"indexes exact: %w",
+					err,
+				)
+			}
+			return res, nil
 		case Less, LessOrEqual:
 			right := &common.Bound{
 				Value:     ex.Value,
 				Inclusive: LessOrEqual == ex.Operator,
 			}
 
-			return e.indexes.Range(ex.Field, nil, right)
+			res, err := e.indexes.Range(ex.Field, nil, right)
+			if err != nil {
+				if errors.Is(err, common.ErrNotFoundRecord) {
+					return &set.Set[domain.RecordID]{}, nil
+				}
+				return nil, fmt.Errorf(
+					"index range: %w",
+					err,
+				)
+			}
+			return res, nil
 		case Bigger, BiggerOrEqual:
 			left := &common.Bound{
 				Value:     ex.Value,
 				Inclusive: BiggerOrEqual == ex.Operator,
 			}
 
-			return e.indexes.Range(ex.Field, left, nil)
+			res, err := e.indexes.Range(ex.Field, left, nil)
+			if err != nil {
+				if errors.Is(err, common.ErrNotFoundRecord) {
+					return &set.Set[domain.RecordID]{}, nil
+				}
+				return nil, fmt.Errorf(
+					"index range: %w",
+					err,
+				)
+			}
+			return res, nil
 		default:
 			return nil, fmt.Errorf("unexpected operator")
 		}

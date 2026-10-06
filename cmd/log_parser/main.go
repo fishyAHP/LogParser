@@ -64,6 +64,11 @@ func New(in io.Reader, out io.Writer) *Cli {
 				FieldType: domain.IntType,
 				IndexType: domain.RangeIndex,
 			},
+			{
+				Name:      "message",
+				FieldType: domain.StringType,
+				IndexType: domain.TextIndex,
+			},
 		},
 	},
 		domain.JSON,

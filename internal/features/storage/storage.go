@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strconv"
 	"sync"
 
@@ -160,8 +159,7 @@ func (s *Storage) Close() error {
 
 func (s *Storage) openPointer(pointer domain.RecordPointer) error {
 	if s.readSegment.IsOpen() {
-		if filepath.Join(s.dir, strconv.Itoa(int(s.readSegment.ID))) ==
-			filepath.Join(pointer.Path, strconv.Itoa(int(pointer.SegmentID))) {
+		if s.readSegment.ID == pointer.SegmentID {
 			return nil
 		}
 
@@ -171,7 +169,7 @@ func (s *Storage) openPointer(pointer domain.RecordPointer) error {
 	}
 
 	newReader, err := newSegment(
-		pointer.Path,
+		s.dir,
 		pointer.SegmentID,
 	)
 	if err != nil {
@@ -183,14 +181,13 @@ func (s *Storage) openPointer(pointer domain.RecordPointer) error {
 }
 
 func (s *Storage) rotationSegment() error {
-	oldID := s.writeSegment.ID
 	if err := s.writeSegment.Close(); err != nil {
 		return fmt.Errorf("rotation segment: %w", err)
 	}
 
 	newWriter, err := newSegment(
 		s.dir,
-		oldID+1,
+		uint64(len(s.records)),
 	)
 	// TODO если тут будет ошибка, то у нас останется только закрытый сегмент для записи
 	if err != nil {

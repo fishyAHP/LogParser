@@ -110,7 +110,6 @@ func (i *Iterator) Next() bool {
 		Offset:    curOffset,
 		Length:    length,
 		SegmentID: curID,
-		Path:      dir,
 	}
 
 	return true

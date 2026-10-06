@@ -82,7 +82,10 @@ func (s *SemanticAnalyzer) Analyze(expr Expr) (TypedExpr, error) {
 				return a.Name == e.Field
 			})
 		if idx == -1 {
-			return nil, fmt.Errorf("unknown field in condition: %s", e.Field)
+			return nil, fmt.Errorf(
+				"unknown field in condition: %s",
+				e.Field,
+			)
 		}
 
 		field := s.scheme.Parameters[idx]
