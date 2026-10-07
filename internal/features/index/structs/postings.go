@@ -7,22 +7,28 @@ import (
 )
 
 type PostingList struct {
-	postings []domain.RecordID
+	posting []domain.RecordID
 }
 
 func NewPostingLists(capacity int) *PostingList {
 	return &PostingList{
-		postings: make([]domain.RecordID, 0, capacity),
+		posting: make([]domain.RecordID, 0, capacity),
+	}
+}
+
+func NewPostingFromSorted(sl []domain.RecordID) *PostingList {
+	return &PostingList{
+		posting: sl,
 	}
 }
 
 func (p *PostingList) Add(id domain.RecordID) bool {
-	if len(p.postings) > 0 &&
-		p.postings[len(p.postings)-1] >= id {
+	if len(p.posting) > 0 &&
+		p.posting[len(p.posting)-1] >= id {
 		return false
 	}
 
-	p.postings = append(p.postings, id)
+	p.posting = append(p.posting, id)
 	return true
 }
 
@@ -31,14 +37,14 @@ func (p *PostingList) Contains(id domain.RecordID) bool {
 }
 
 func (p *PostingList) Index(id domain.RecordID) int {
-	left, right := 0, len(p.postings)-1
+	left, right := 0, len(p.posting)-1
 
 	for left <= right {
 		mid := left + (right-left)/2
 
-		if p.postings[mid] == id {
+		if p.posting[mid] == id {
 			return mid
-		} else if p.postings[mid] > id {
+		} else if p.posting[mid] > id {
 			right = mid - 1
 		} else {
 			left = mid + 1
@@ -51,20 +57,20 @@ func (p *PostingList) Index(id domain.RecordID) int {
 func (p *PostingList) Remove(id domain.RecordID) bool {
 	idx := p.Index(id)
 	if idx != -1 {
-		p.postings = slices.Delete(p.postings, idx, idx+1)
+		p.posting = slices.Delete(p.posting, idx, idx+1)
 		return true
 	}
 	return false
 }
 
 func (p *PostingList) Clear() {
-	p.postings = make([]domain.RecordID, 0)
+	p.posting = make([]domain.RecordID, 0)
 }
 
 func (p *PostingList) Len() int {
-	return len(p.postings)
+	return len(p.posting)
 }
 
 func (p *PostingList) Slice() []domain.RecordID {
-	return slices.Clone(p.postings)
+	return slices.Clone(p.posting)
 }

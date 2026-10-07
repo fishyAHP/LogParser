@@ -85,7 +85,7 @@ func (s *Service) Index(
 func (s *Service) Exact(
 	fieldName string,
 	value domain.Value,
-) (*structs.Set[domain.RecordID], error) {
+) (*structs.PostingList, error) {
 	idx, ok := s.indexes[fieldName]
 	if !ok {
 		return nil, ErrIndexNotFound
@@ -110,7 +110,7 @@ func (s *Service) Exact(
 func (s *Service) Range(
 	fieldName string,
 	from, to *common.Bound,
-) (*structs.Set[domain.RecordID], error) {
+) (*structs.PostingList, error) {
 	idx, ok := s.indexes[fieldName]
 	if !ok {
 		return nil, ErrIndexNotFound

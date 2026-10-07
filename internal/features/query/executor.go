@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 
-	"fishyAHP/LogParser.git/internal/core/domain"
 	"fishyAHP/LogParser.git/internal/features/index"
 	"fishyAHP/LogParser.git/internal/features/index/common"
 	"fishyAHP/LogParser.git/internal/features/index/structs"
@@ -30,7 +29,7 @@ func NewExecutor(indexes *index.Service) *Executor {
 
 func (e *Executor) Execute(
 	s string,
-) (*structs.Set[domain.RecordID], error) {
+) (*structs.PostingList, error) {
 	expr, err := e.syntax.Query(s)
 	if err != nil {
 		return nil, fmt.Errorf(
@@ -59,7 +58,7 @@ func (e *Executor) Execute(
 
 func (e *Executor) executeExpr(
 	typedExpr TypedExpr,
-) (*structs.Set[domain.RecordID], error) {
+) (*structs.PostingList, error) {
 	switch ex := typedExpr.(type) {
 	case *TypedBinaryExpr:
 		left, err := e.executeExpr(ex.Left)
@@ -79,9 +78,9 @@ func (e *Executor) executeExpr(
 
 		switch ex.Operator {
 		case Or:
-			return structs.UnionSets(left, right), nil
+			return structs.UnionLists(left, right), nil
 		case And:
-			return structs.IntersectionSets(left, right), nil
+			return structs.IntersectionLists(left, right), nil
 		default:
 			return nil, fmt.Errorf("unexpected logical operator")
 		}
@@ -91,7 +90,7 @@ func (e *Executor) executeExpr(
 			res, err := e.indexes.Exact(ex.Field, ex.Value)
 			if err != nil {
 				if errors.Is(err, common.ErrNotFoundRecord) {
-					return &structs.Set[domain.RecordID]{}, nil
+					return &structs.PostingList{}, nil
 				}
 				return nil, fmt.Errorf(
 					"indexes exact: %w",
@@ -105,34 +104,34 @@ func (e *Executor) executeExpr(
 				Inclusive: LessOrEqual == ex.Operator,
 			}
 
-			res, err := e.indexes.Range(ex.Field, nil, right)
+			posting, err := e.indexes.Range(ex.Field, nil, right)
 			if err != nil {
 				if errors.Is(err, common.ErrNotFoundRecord) {
-					return &structs.Set[domain.RecordID]{}, nil
+					return &structs.PostingList{}, nil
 				}
 				return nil, fmt.Errorf(
 					"index range: %w",
 					err,
 				)
 			}
-			return res, nil
+			return posting, nil
 		case Bigger, BiggerOrEqual:
 			left := &common.Bound{
 				Value:     ex.Value,
 				Inclusive: BiggerOrEqual == ex.Operator,
 			}
 
-			res, err := e.indexes.Range(ex.Field, left, nil)
+			posting, err := e.indexes.Range(ex.Field, left, nil)
 			if err != nil {
 				if errors.Is(err, common.ErrNotFoundRecord) {
-					return &structs.Set[domain.RecordID]{}, nil
+					return &structs.PostingList{}, nil
 				}
 				return nil, fmt.Errorf(
 					"index range: %w",
 					err,
 				)
 			}
-			return res, nil
+			return posting, nil
 		default:
 			return nil, fmt.Errorf("unexpected operator")
 		}

@@ -1,5 +1,11 @@
 package structs
 
+import (
+	"slices"
+
+	"fishyAHP/LogParser.git/internal/core/domain"
+)
+
 func IntersectionSets[K comparable](s1, s2 *Set[K]) *Set[K] {
 	smaller := minSet[K](s1, s2)
 	other := otherSet[K](smaller, s1, s2)
@@ -61,12 +67,12 @@ func IntersectionLists(s1, s2 *PostingList) *PostingList {
 
 	for i < s1.Len() && j < s2.Len() {
 		switch {
-		case s1.postings[i] < s2.postings[j]:
+		case s1.posting[i] < s2.posting[j]:
 			i++
-		case s1.postings[i] > s2.postings[j]:
+		case s1.posting[i] > s2.posting[j]:
 			j++
 		default:
-			res.Add(s1.postings[i])
+			res.Add(s1.posting[i])
 			i++
 			j++
 		}
@@ -81,25 +87,25 @@ func UnionLists(s1, s2 *PostingList) *PostingList {
 
 	for i < s1.Len() && j < s2.Len() {
 		switch {
-		case s1.postings[i] < s2.postings[j]:
-			res.Add(s1.postings[i])
+		case s1.posting[i] < s2.posting[j]:
+			res.Add(s1.posting[i])
 			i++
-		case s1.postings[i] > s2.postings[j]:
-			res.Add(s2.postings[j])
+		case s1.posting[i] > s2.posting[j]:
+			res.Add(s2.posting[j])
 			j++
 		default:
-			res.Add(s1.postings[i])
+			res.Add(s1.posting[i])
 			i++
 			j++
 		}
 	}
 
 	for ; i < s1.Len(); i++ {
-		res.Add(s1.postings[i])
+		res.Add(s1.posting[i])
 	}
 
 	for ; j < s2.Len(); j++ {
-		res.Add(s2.postings[j])
+		res.Add(s2.posting[j])
 	}
 
 	return res
@@ -112,10 +118,10 @@ func DifferenceLists(s1, s2 *PostingList) *PostingList {
 
 	for i < s1.Len() && j < s2.Len() {
 		switch {
-		case s1.postings[i] < s2.postings[j]:
-			res.Add(s1.postings[i])
+		case s1.posting[i] < s2.posting[j]:
+			res.Add(s1.posting[i])
 			i++
-		case s1.postings[i] > s2.postings[j]:
+		case s1.posting[i] > s2.posting[j]:
 			j++
 		default:
 			i++
@@ -125,8 +131,20 @@ func DifferenceLists(s1, s2 *PostingList) *PostingList {
 	}
 
 	for ; i < s1.Len(); i++ {
-		res.Add(s1.postings[i])
+		res.Add(s1.posting[i])
 	}
 
 	return res
+}
+
+func SetToPosting(set *Set[domain.RecordID]) *PostingList {
+	arr := make([]domain.RecordID, 0, set.Len())
+	for k := range set.set {
+		arr = append(arr, k)
+	}
+	slices.Sort(arr)
+
+	posting := NewPostingFromSorted(arr)
+
+	return posting
 }

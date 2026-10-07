@@ -26,12 +26,12 @@ type Index interface {
 
 type ExactIndex interface {
 	Index
-	Exact(domain.Value) (*structs.Set[domain.RecordID], error)
+	Exact(domain.Value) (*structs.PostingList, error)
 }
 
 type RangeIndex interface {
 	ExactIndex
-	Range(from, to *Bound) (*structs.Set[domain.RecordID], error)
+	Range(from, to *Bound) (*structs.PostingList, error)
 }
 
 type TextIndex interface {

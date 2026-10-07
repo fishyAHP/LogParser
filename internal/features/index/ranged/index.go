@@ -1,6 +1,8 @@
 package ranged
 
 import (
+	"slices"
+
 	"fishyAHP/LogParser.git/internal/core/domain"
 	"fishyAHP/LogParser.git/internal/features/index/structs"
 
@@ -17,7 +19,7 @@ type localBound[K common.Key] struct {
 
 func (i *Index[K]) Range(
 	from, to *common.Bound,
-) (*structs.Set[domain.RecordID], error) {
+) (*structs.PostingList, error) {
 	var (
 		fromBound *localBound[K]
 		toBound   *localBound[K]
@@ -44,20 +46,18 @@ func (i *Index[K]) Range(
 		}
 	}
 
-	records, ok := i.tree.innerRange(fromBound, toBound)
+	res, ok := i.tree.innerRange(fromBound, toBound)
 	if !ok {
 		return nil, common.ErrNotFoundRecord
 	}
 
-	s := structs.NewSet[domain.RecordID](len(records))
-	s.AddMany(records...)
-
-	return s, nil
+	slices.Sort(res)
+	return structs.NewPostingFromSorted(res), nil
 }
 
 func (i *Index[K]) Exact(
 	value domain.Value,
-) (*structs.Set[domain.RecordID], error) {
+) (*structs.PostingList, error) {
 	key, ok := value.(K)
 	if !ok {
 		return nil, common.ErrInvalidType
@@ -103,30 +103,38 @@ func (i *Index[K]) Remove(
 	return nil
 }
 
-func (i *Index[K]) Min() *structs.Set[domain.RecordID] {
+func (i *Index[K]) Min() *structs.PostingList {
 	if i.tree.len() == 0 {
 		return nil
 	}
 	if i.tree.len() == 1 {
-		return i.tree.root.records
+		return i.tree.root.
+			records.
+			toPosting()
 	}
 
 	minNode := i.tree.min()
 
-	return minNode.records
+	return minNode.
+		records.
+		toPosting()
 }
 
-func (i *Index[K]) Max() *structs.Set[domain.RecordID] {
+func (i *Index[K]) Max() *structs.PostingList {
 	if i.tree.len() == 0 {
 		return nil
 	}
 	if i.tree.len() == 1 {
-		return i.tree.root.records
+		return i.tree.root.
+			records.
+			toPosting()
 	}
 
 	maxNode := i.tree.max()
 
-	return maxNode.records.Clone()
+	return maxNode.
+		records.
+		toPosting()
 }
 
 func (i *Index[K]) Len() int {
