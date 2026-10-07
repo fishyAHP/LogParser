@@ -2,7 +2,7 @@ package ranged
 
 import (
 	"fishyAHP/LogParser.git/internal/core/domain"
-	"fishyAHP/LogParser.git/internal/features/index/set"
+	"fishyAHP/LogParser.git/internal/features/index/structs"
 )
 
 type color uint
@@ -14,7 +14,7 @@ const (
 
 type node[K comparable] struct {
 	key     K
-	records *set.Set[domain.RecordID]
+	records *structs.Set[domain.RecordID]
 
 	left, right *node[K]
 	parent      *node[K]
@@ -23,7 +23,7 @@ type node[K comparable] struct {
 }
 
 func newNode[K comparable](key K, value domain.RecordID) *node[K] {
-	s := set.New[domain.RecordID](0)
+	s := structs.New[domain.RecordID](0)
 	s.Add(value)
 
 	return &node[K]{

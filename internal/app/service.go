@@ -183,6 +183,9 @@ func (s *Service) Query(q string) ([][]byte, error) {
 	for _, record := range sl {
 		data, err := s.store.ReadByID(record)
 		if err != nil {
+			if errors.Is(err, storage.ErrRecordNotFound) {
+				continue
+			}
 			return nil, fmt.Errorf(
 				"read record %v: %w",
 				record,

@@ -6,7 +6,7 @@ import (
 
 	"fishyAHP/LogParser.git/internal/core/domain"
 	"fishyAHP/LogParser.git/internal/features/index/common"
-	"fishyAHP/LogParser.git/internal/features/index/set"
+	"fishyAHP/LogParser.git/internal/features/index/structs"
 )
 
 type rbTree[K common.Key] struct {
@@ -198,7 +198,7 @@ func (t *rbTree[K]) rightRotate(n *node[K]) {
 // because if it will return domain.RecordID, it changes
 // from O(log n) to O(n). Also this func return bool which means
 // if true, it founded key, another not yet.
-func (t *rbTree[K]) find(key K) (*set.Set[domain.RecordID], bool) {
+func (t *rbTree[K]) find(key K) (*structs.Set[domain.RecordID], bool) {
 	cur := t.root
 
 	for cur != nil {

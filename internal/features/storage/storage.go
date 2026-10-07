@@ -15,7 +15,7 @@ import (
 type Storage struct {
 	dir          string
 	recordsCount uint64
-	records      map[domain.RecordID]domain.RecordPointer
+	records      []domain.RecordPointer
 
 	readSegment  *segment
 	writeSegment *segment
@@ -62,7 +62,7 @@ func New(path string) (*Storage, error) {
 	}
 
 	if writer.isOverloaded(0) {
-		if err = writer.Close(); err != nil {
+		if err = writer.close(); err != nil {
 			return nil, fmt.Errorf("close old writer: %w", err)
 		}
 
@@ -73,7 +73,7 @@ func New(path string) (*Storage, error) {
 
 	return &Storage{
 		dir:          path,
-		records:      make(map[domain.RecordID]domain.RecordPointer),
+		records:      make([]domain.RecordPointer, 0),
 		writeSegment: writer,
 		readSegment:  &segment{},
 	}, nil
@@ -93,24 +93,24 @@ func (s *Storage) Write(data []byte) (domain.RecordID, error) {
 		}
 	}
 
-	pointer, err := s.writeSegment.Write(data, s.recordsCount+1)
+	pointer, err := s.writeSegment.write(data, s.recordsCount+1)
 	if err != nil {
 		return 0, fmt.Errorf("write segment: %w", err)
 	}
 
 	s.recordsCount++
-	s.records[domain.RecordID(s.recordsCount)] = pointer
+	s.records = append(s.records, pointer)
 
 	return domain.RecordID(s.recordsCount), nil
 }
 
 func (s *Storage) ReadByID(id domain.RecordID) ([]byte, error) {
-	pointer, ok := s.records[id]
-	if !ok {
+	if 0 > id ||
+		id > domain.RecordID(len(s.records)) {
 		return nil, ErrRecordNotFound
 	}
 
-	return s.read(pointer)
+	return s.read(s.records[id-1])
 }
 
 func (s *Storage) read(pointer domain.RecordPointer) (data []byte, err error) {
@@ -121,12 +121,18 @@ func (s *Storage) read(pointer domain.RecordPointer) (data []byte, err error) {
 	}
 
 	if err = s.openPointer(pointer); err != nil {
-		return nil, fmt.Errorf("read storage: %w", err)
+		return nil, fmt.Errorf(
+			"open pointer: %w",
+			err,
+		)
 	}
 
-	data, err = s.readSegment.Read(pointer)
+	data, err = s.readSegment.read(pointer)
 	if err != nil {
-		return nil, fmt.Errorf("read storage: %w", err)
+		return nil, fmt.Errorf(
+			"read segment: %w",
+			err,
+		)
 	}
 
 	return
@@ -136,8 +142,8 @@ func (s *Storage) Close() error {
 	s.readMtx.Lock()
 	defer s.readMtx.Unlock()
 
-	if s.readSegment.IsOpen() {
-		if err := s.readSegment.Close(); err != nil {
+	if s.readSegment.isOpen() {
+		if err := s.readSegment.close(); err != nil {
 			return fmt.Errorf("close read segment: %w", err)
 		}
 	}
@@ -145,8 +151,8 @@ func (s *Storage) Close() error {
 	s.writeMtx.Lock()
 	defer s.writeMtx.Unlock()
 
-	if s.writeSegment.IsOpen() {
-		if err := s.writeSegment.Close(); err != nil {
+	if s.writeSegment.isOpen() {
+		if err := s.writeSegment.close(); err != nil {
 			return fmt.Errorf("close write segment: %w", err)
 		}
 	}
@@ -158,12 +164,12 @@ func (s *Storage) Close() error {
 }
 
 func (s *Storage) openPointer(pointer domain.RecordPointer) error {
-	if s.readSegment.IsOpen() {
+	if s.readSegment.isOpen() {
 		if s.readSegment.ID == pointer.SegmentID {
 			return nil
 		}
 
-		if err := s.readSegment.Close(); err != nil {
+		if err := s.readSegment.close(); err != nil {
 			return fmt.Errorf("open pointer: %w", err)
 		}
 	}
@@ -181,7 +187,7 @@ func (s *Storage) openPointer(pointer domain.RecordPointer) error {
 }
 
 func (s *Storage) rotationSegment() error {
-	if err := s.writeSegment.Close(); err != nil {
+	if err := s.writeSegment.close(); err != nil {
 		return fmt.Errorf("rotation segment: %w", err)
 	}
 

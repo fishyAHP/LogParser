@@ -1,4 +1,4 @@
-package set
+package structs
 
 type Set[K comparable] struct {
 	set map[K]struct{}

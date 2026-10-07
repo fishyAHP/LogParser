@@ -7,7 +7,7 @@ import (
 	"fishyAHP/LogParser.git/internal/core/domain"
 	"fishyAHP/LogParser.git/internal/features/index"
 	"fishyAHP/LogParser.git/internal/features/index/common"
-	"fishyAHP/LogParser.git/internal/features/index/set"
+	"fishyAHP/LogParser.git/internal/features/index/structs"
 )
 
 type Executor struct {
@@ -30,7 +30,7 @@ func NewExecutor(indexes *index.Service) *Executor {
 
 func (e *Executor) Execute(
 	s string,
-) (*set.Set[domain.RecordID], error) {
+) (*structs.Set[domain.RecordID], error) {
 	expr, err := e.syntax.Query(s)
 	if err != nil {
 		return nil, fmt.Errorf(
@@ -59,7 +59,7 @@ func (e *Executor) Execute(
 
 func (e *Executor) executeExpr(
 	typedExpr TypedExpr,
-) (*set.Set[domain.RecordID], error) {
+) (*structs.Set[domain.RecordID], error) {
 	switch ex := typedExpr.(type) {
 	case *TypedBinaryExpr:
 		left, err := e.executeExpr(ex.Left)
@@ -79,9 +79,9 @@ func (e *Executor) executeExpr(
 
 		switch ex.Operator {
 		case Or:
-			return set.Union(left, right), nil
+			return structs.Union(left, right), nil
 		case And:
-			return set.Intersection(left, right), nil
+			return structs.Intersection(left, right), nil
 		default:
 			return nil, fmt.Errorf("unexpected logical operator")
 		}
@@ -91,7 +91,7 @@ func (e *Executor) executeExpr(
 			res, err := e.indexes.Exact(ex.Field, ex.Value)
 			if err != nil {
 				if errors.Is(err, common.ErrNotFoundRecord) {
-					return &set.Set[domain.RecordID]{}, nil
+					return &structs.Set[domain.RecordID]{}, nil
 				}
 				return nil, fmt.Errorf(
 					"indexes exact: %w",
@@ -108,7 +108,7 @@ func (e *Executor) executeExpr(
 			res, err := e.indexes.Range(ex.Field, nil, right)
 			if err != nil {
 				if errors.Is(err, common.ErrNotFoundRecord) {
-					return &set.Set[domain.RecordID]{}, nil
+					return &structs.Set[domain.RecordID]{}, nil
 				}
 				return nil, fmt.Errorf(
 					"index range: %w",
@@ -125,7 +125,7 @@ func (e *Executor) executeExpr(
 			res, err := e.indexes.Range(ex.Field, left, nil)
 			if err != nil {
 				if errors.Is(err, common.ErrNotFoundRecord) {
-					return &set.Set[domain.RecordID]{}, nil
+					return &structs.Set[domain.RecordID]{}, nil
 				}
 				return nil, fmt.Errorf(
 					"index range: %w",

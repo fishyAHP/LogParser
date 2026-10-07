@@ -4,19 +4,19 @@ import (
 	"strings"
 	"unicode"
 
-	"fishyAHP/LogParser.git/internal/features/index/set"
+	"fishyAHP/LogParser.git/internal/features/index/structs"
 )
 
 type Tokenizer struct {
 	minTokenLength uint8
-	ignoringWords  *set.Set[Token]
+	ignoringWords  *structs.Set[Token]
 }
 
 type Token string
 
 func NewDefault() *Tokenizer {
 	ignore := []Token{"the", "a", "an", "of", "be", "is", "to", "are", "was", "were", "did"}
-	s := set.New[Token](len(ignore))
+	s := structs.New[Token](len(ignore))
 	s.AddMany(ignore...)
 
 	return &Tokenizer{
@@ -26,7 +26,7 @@ func NewDefault() *Tokenizer {
 }
 
 func New(minToken uint8, ignoringWords ...Token) *Tokenizer {
-	s := set.New[Token](len(ignoringWords))
+	s := structs.New[Token](len(ignoringWords))
 	s.AddMany(ignoringWords...)
 
 	return &Tokenizer{

@@ -6,7 +6,7 @@ import (
 
 	"fishyAHP/LogParser.git/internal/core/domain"
 	"fishyAHP/LogParser.git/internal/features/index/common"
-	"fishyAHP/LogParser.git/internal/features/index/set"
+	"fishyAHP/LogParser.git/internal/features/index/structs"
 )
 
 var (
@@ -85,7 +85,7 @@ func (s *Service) Index(
 func (s *Service) Exact(
 	fieldName string,
 	value domain.Value,
-) (*set.Set[domain.RecordID], error) {
+) (*structs.Set[domain.RecordID], error) {
 	idx, ok := s.indexes[fieldName]
 	if !ok {
 		return nil, ErrIndexNotFound
@@ -110,7 +110,7 @@ func (s *Service) Exact(
 func (s *Service) Range(
 	fieldName string,
 	from, to *common.Bound,
-) (*set.Set[domain.RecordID], error) {
+) (*structs.Set[domain.RecordID], error) {
 	idx, ok := s.indexes[fieldName]
 	if !ok {
 		return nil, ErrIndexNotFound

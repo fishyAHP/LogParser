@@ -4,7 +4,7 @@ import (
 	"errors"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
-	"fishyAHP/LogParser.git/internal/features/index/set"
+	"fishyAHP/LogParser.git/internal/features/index/structs"
 )
 
 var (
@@ -26,17 +26,17 @@ type Index interface {
 
 type ExactIndex interface {
 	Index
-	Exact(domain.Value) (*set.Set[domain.RecordID], error)
+	Exact(domain.Value) (*structs.Set[domain.RecordID], error)
 }
 
 type RangeIndex interface {
 	ExactIndex
-	Range(from, to *Bound) (*set.Set[domain.RecordID], error)
+	Range(from, to *Bound) (*structs.Set[domain.RecordID], error)
 }
 
 type TextIndex interface {
 	Index
-	Search(domain.Value) (*set.Set[domain.RecordID], error)
+	Search(domain.Value) (*structs.Set[domain.RecordID], error)
 }
 
 type Bound struct {

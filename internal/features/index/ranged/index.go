@@ -2,7 +2,7 @@ package ranged
 
 import (
 	"fishyAHP/LogParser.git/internal/core/domain"
-	"fishyAHP/LogParser.git/internal/features/index/set"
+	"fishyAHP/LogParser.git/internal/features/index/structs"
 
 	"fishyAHP/LogParser.git/internal/features/index/common"
 )
@@ -17,7 +17,7 @@ type localBound[K common.Key] struct {
 
 func (i *Index[K]) Range(
 	from, to *common.Bound,
-) (*set.Set[domain.RecordID], error) {
+) (*structs.Set[domain.RecordID], error) {
 	var (
 		fromBound *localBound[K]
 		toBound   *localBound[K]
@@ -49,7 +49,7 @@ func (i *Index[K]) Range(
 		return nil, common.ErrNotFoundRecord
 	}
 
-	s := set.New[domain.RecordID](len(records))
+	s := structs.New[domain.RecordID](len(records))
 	s.AddMany(records...)
 
 	return s, nil
@@ -57,7 +57,7 @@ func (i *Index[K]) Range(
 
 func (i *Index[K]) Exact(
 	value domain.Value,
-) (*set.Set[domain.RecordID], error) {
+) (*structs.Set[domain.RecordID], error) {
 	key, ok := value.(K)
 	if !ok {
 		return nil, common.ErrInvalidType
@@ -103,7 +103,7 @@ func (i *Index[K]) Remove(
 	return nil
 }
 
-func (i *Index[K]) Min() *set.Set[domain.RecordID] {
+func (i *Index[K]) Min() *structs.Set[domain.RecordID] {
 	if i.tree.len() == 0 {
 		return nil
 	}
@@ -116,7 +116,7 @@ func (i *Index[K]) Min() *set.Set[domain.RecordID] {
 	return minNode.records
 }
 
-func (i *Index[K]) Max() *set.Set[domain.RecordID] {
+func (i *Index[K]) Max() *structs.Set[domain.RecordID] {
 	if i.tree.len() == 0 {
 		return nil
 	}

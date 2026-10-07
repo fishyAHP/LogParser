@@ -1,4 +1,4 @@
-package set
+package structs
 
 func Intersection[K comparable](s1, s2 *Set[K]) *Set[K] {
 	smaller := minSet[K](s1, s2)

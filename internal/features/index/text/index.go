@@ -5,7 +5,7 @@ import (
 
 	"fishyAHP/LogParser.git/internal/core/domain"
 	"fishyAHP/LogParser.git/internal/features/index/common"
-	"fishyAHP/LogParser.git/internal/features/index/set"
+	"fishyAHP/LogParser.git/internal/features/index/structs"
 	"fishyAHP/LogParser.git/internal/features/index/text/words"
 )
 
@@ -14,7 +14,7 @@ type Index struct {
 	invert    invertIndex
 	Tokenizer *words.Tokenizer
 }
-type invertIndex = map[words.Token]*set.Set[domain.RecordID]
+type invertIndex = map[words.Token]*structs.Set[domain.RecordID]
 
 func New() *Index {
 	return &Index{
@@ -23,7 +23,7 @@ func New() *Index {
 	}
 }
 
-func (i *Index) Search(value domain.Value) (*set.Set[domain.RecordID], error) {
+func (i *Index) Search(value domain.Value) (*structs.Set[domain.RecordID], error) {
 	strVal, ok := value.(domain.StringValue)
 	if !ok {
 		return nil, common.ErrInvalidType
@@ -43,13 +43,13 @@ func (i *Index) Add(value domain.Value, record domain.RecordID) error {
 	}
 
 	tokens := i.Tokenizer.Tokenize(string(strVal))
-	sett := set.New[words.Token](len(tokens))
+	sett := structs.New[words.Token](len(tokens))
 	sett.AddMany(tokens...)
 	tokens = sett.Slice()
 
 	for _, token := range tokens {
 		if _, ok := i.invert[token]; !ok {
-			i.invert[token] = set.New[domain.RecordID](1)
+			i.invert[token] = structs.New[domain.RecordID](1)
 		}
 
 		if i.invert[token].Add(record) {
@@ -60,9 +60,9 @@ func (i *Index) Add(value domain.Value, record domain.RecordID) error {
 	return nil
 }
 
-func (i *Index) get(s string) *set.Set[domain.RecordID] {
+func (i *Index) get(s string) *structs.Set[domain.RecordID] {
 	tokens := i.Tokenizer.Tokenize(s)
-	sets := make([]*set.Set[domain.RecordID], 0, len(tokens))
+	sets := make([]*structs.Set[domain.RecordID], 0, len(tokens))
 
 	for _, token := range tokens {
 		if sett, ok := i.invert[token]; ok {
@@ -72,7 +72,7 @@ func (i *Index) get(s string) *set.Set[domain.RecordID] {
 		}
 	}
 
-	slices.SortFunc(sets, func(a, b *set.Set[domain.RecordID]) int {
+	slices.SortFunc(sets, func(a, b *structs.Set[domain.RecordID]) int {
 		if a.Len() > b.Len() {
 			return 1
 		}
@@ -86,11 +86,11 @@ func (i *Index) get(s string) *set.Set[domain.RecordID] {
 		return nil
 	}
 	start := 1
-	res := set.New[domain.RecordID](sets[0].Len())
+	res := structs.New[domain.RecordID](sets[0].Len())
 	res.AddMany(sets[0].Slice()...)
 
 	for j := start; j < len(sets); j++ {
-		res = set.Intersection(res, sets[j])
+		res = structs.Intersection(res, sets[j])
 
 		if res.Len() == 0 {
 			return nil
