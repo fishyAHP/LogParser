@@ -106,12 +106,14 @@ func (i *Iterator) Next() bool {
 	if recordID > i.storage.recordsCount {
 		i.storage.recordsCount = recordID
 	}
-	i.storage.records[i.record] = domain.RecordPointer{
-		Offset:    curOffset,
-		Length:    length,
-		SegmentID: curID,
-		Path:      dir,
-	}
+
+	i.storage.records = append(
+		i.storage.records,
+		domain.RecordPointer{
+			Offset:    curOffset,
+			Length:    length,
+			SegmentID: curID,
+		})
 
 	return true
 }

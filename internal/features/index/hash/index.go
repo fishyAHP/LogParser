@@ -5,25 +5,25 @@ import (
 
 	"fishyAHP/LogParser.git/internal/core/domain"
 	"fishyAHP/LogParser.git/internal/features/index/common"
-	"fishyAHP/LogParser.git/internal/features/index/set"
+	"fishyAHP/LogParser.git/internal/features/index/structs"
 )
 
 type Index[K common.Key] struct {
 	count int
-	idx   map[K]*set.Set[domain.RecordID]
+	idx   map[K]*structs.PostingList
 	mtx   sync.RWMutex
 }
 
 func New[K common.Key]() *Index[K] {
 	return &Index[K]{
-		idx: make(map[K]*set.Set[domain.RecordID]),
+		idx: make(map[K]*structs.PostingList),
 		mtx: sync.RWMutex{},
 	}
 }
 
 func (i *Index[K]) Exact(
 	value domain.Value,
-) (*set.Set[domain.RecordID], error) {
+) (*structs.PostingList, error) {
 	i.mtx.RLock()
 	defer i.mtx.RUnlock()
 
@@ -36,7 +36,7 @@ func (i *Index[K]) Exact(
 		return nil, common.ErrNotFoundRecord
 	}
 
-	return s.Clone(), nil
+	return s, nil
 }
 
 func (i *Index[K]) Add(
@@ -51,7 +51,7 @@ func (i *Index[K]) Add(
 		return common.ErrInvalidType
 	}
 	if _, ok := i.idx[newVal]; !ok {
-		i.idx[newVal] = set.New[domain.RecordID](1)
+		i.idx[newVal] = structs.NewPostingLists(1)
 	}
 	if i.idx[newVal].Add(record) {
 		i.count++
@@ -96,6 +96,6 @@ func (i *Index[K]) Clear() {
 	i.mtx.Lock()
 	defer i.mtx.Unlock()
 
-	i.idx = make(map[K]*set.Set[domain.RecordID])
+	i.idx = make(map[K]*structs.PostingList)
 	i.count = 0
 }

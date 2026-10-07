@@ -1,10 +1,10 @@
-package set
+package structs
 
 type Set[K comparable] struct {
 	set map[K]struct{}
 }
 
-func New[K comparable](length int) *Set[K] {
+func NewSet[K comparable](length int) *Set[K] {
 	return &Set[K]{
 		make(map[K]struct{}, length),
 	}
@@ -58,7 +58,7 @@ func (s *Set[K]) Contains(value K) bool {
 }
 
 func (s *Set[K]) Clone() *Set[K] {
-	newSet := New[K](s.Len())
+	newSet := NewSet[K](s.Len())
 
 	for k := range s.set {
 		newSet.Add(k)

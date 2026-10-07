@@ -36,7 +36,7 @@ func TestStorage_New(t *testing.T) {
 			t.Fatal("write segment is nil")
 		}
 
-		if !s.writeSegment.IsOpen() {
+		if !s.writeSegment.isOpen() {
 			t.Error("write segment should be open")
 		}
 
@@ -185,7 +185,7 @@ func TestStorage_RotationSegment(t *testing.T) {
 		)
 	}
 
-	if !s.writeSegment.IsOpen() {
+	if !s.writeSegment.isOpen() {
 		t.Error("new write segment should be open")
 	}
 }
@@ -205,11 +205,11 @@ func TestStorage_RotationClosesOldSegment(t *testing.T) {
 		t.Fatalf("rotation: %v", err)
 	}
 
-	if oldSegment.IsOpen() {
+	if oldSegment.isOpen() {
 		t.Error("old segment should be closed")
 	}
 
-	if !s.writeSegment.IsOpen() {
+	if !s.writeSegment.isOpen() {
 		t.Error("new segment should be open")
 	}
 }
@@ -226,11 +226,11 @@ func TestStorage_Close(t *testing.T) {
 		t.Fatalf("close storage: %v", err)
 	}
 
-	if s.writeSegment.IsOpen() {
+	if s.writeSegment.isOpen() {
 		t.Error("write segment should be closed")
 	}
 
-	if s.readSegment.IsOpen() {
+	if s.readSegment.isOpen() {
 		t.Error("read segment should be closed")
 	}
 }

@@ -23,6 +23,12 @@ const (
 	loadFactor = 87.5 / 100
 )
 
+const (
+	RecordLengthSize = 4 * Byte
+	RecordIdSize     = 8 * Byte
+	RecordHeaderSize = RecordLengthSize + RecordIdSize
+)
+
 func (f FileSize) String() string {
 	switch {
 	case f >= MByte:
@@ -146,13 +152,7 @@ func (s *segment) isOverloaded(size FileSize) bool {
 	return float64(s.size+size)/float64(MaxSegmentSize) >= loadFactor
 }
 
-const (
-	RecordLengthSize = 4 * Byte
-	RecordIdSize     = 8 * Byte
-	RecordHeaderSize = RecordLengthSize + RecordIdSize
-)
-
-func (s *segment) Write(data []byte, recordID uint64) (domain.RecordPointer, error) {
+func (s *segment) write(data []byte, recordID uint64) (domain.RecordPointer, error) {
 	header := make([]byte, RecordHeaderSize)
 
 	binary.BigEndian.PutUint32(header[0:4], uint32(len(data)))
@@ -175,14 +175,13 @@ func (s *segment) Write(data []byte, recordID uint64) (domain.RecordPointer, err
 		Offset:    uint64(s.size + RecordHeaderSize),
 		Length:    uint32(len(data)),
 		SegmentID: s.ID,
-		Path:      filepath.Dir(s.file.Name()),
 	}
 	s.size += FileSize(n)
 
 	return pointer, nil
 }
 
-func (s *segment) Read(pointer domain.RecordPointer) ([]byte, error) {
+func (s *segment) read(pointer domain.RecordPointer) ([]byte, error) {
 	if s.ID != pointer.SegmentID {
 		return nil, errors.New("not suitable record data")
 	}
@@ -208,15 +207,18 @@ func (s *segment) Read(pointer domain.RecordPointer) ([]byte, error) {
 	return data, nil
 }
 
-func (s *segment) Close() error {
+func (s *segment) close() error {
 	if err := s.file.Close(); err != nil {
-		return fmt.Errorf("close file: %w", err)
+		return fmt.Errorf(
+			"close segment file: %w",
+			err,
+		)
 	}
 
 	s.ID = 0
 	return nil
 }
 
-func (s *segment) IsOpen() bool {
+func (s *segment) isOpen() bool {
 	return s.ID != 0
 }

@@ -14,18 +14,18 @@ func TestSegment_WriteRead(t *testing.T) {
 	if err != nil {
 		t.Fatalf("newSegment: %v", err)
 	}
-	defer seg.Close()
+	defer seg.close()
 
 	want := []byte(`{"level":"INFO","message":"hello"}`)
 
-	record, err := seg.Write(want, 1)
+	record, err := seg.write(want, 1)
 	if err != nil {
-		t.Fatalf("Write: %v", err)
+		t.Fatalf("write: %v", err)
 	}
 
-	got, err := seg.Read(record)
+	got, err := seg.read(record)
 	if err != nil {
-		t.Fatalf("Read: %v", err)
+		t.Fatalf("read: %v", err)
 	}
 
 	if !bytes.Equal(got, want) {
@@ -52,7 +52,7 @@ func TestSegment_WriteReadMultiple(t *testing.T) {
 	if err != nil {
 		t.Fatalf("newSegment: %v", err)
 	}
-	defer seg.Close()
+	defer seg.close()
 
 	input := [][]byte{
 		[]byte(`{"level":"INFO","message":"first"}`),
@@ -63,18 +63,18 @@ func TestSegment_WriteReadMultiple(t *testing.T) {
 	records := make([]*domain.RecordData, 0, len(input))
 
 	for i, data := range input {
-		record, err := seg.Write(data, uint64(i+1))
+		record, err := seg.write(data, uint64(i+1))
 		if err != nil {
-			t.Fatalf("Write: %v", err)
+			t.Fatalf("write: %v", err)
 		}
 
 		records = append(records, record)
 	}
 
 	for i, record := range records {
-		got, err := seg.Read(record)
+		got, err := seg.read(record)
 		if err != nil {
-			t.Fatalf("Read record %d: %v", i, err)
+			t.Fatalf("read record %d: %v", i, err)
 		}
 
 		if !bytes.Equal(got, input[i]) {
