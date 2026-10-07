@@ -16,7 +16,7 @@ type Token string
 
 func NewDefault() *Tokenizer {
 	ignore := []Token{"the", "a", "an", "of", "be", "is", "to", "are", "was", "were", "did"}
-	s := structs.New[Token](len(ignore))
+	s := structs.NewSet[Token](len(ignore))
 	s.AddMany(ignore...)
 
 	return &Tokenizer{
@@ -26,7 +26,7 @@ func NewDefault() *Tokenizer {
 }
 
 func New(minToken uint8, ignoringWords ...Token) *Tokenizer {
-	s := structs.New[Token](len(ignoringWords))
+	s := structs.NewSet[Token](len(ignoringWords))
 	s.AddMany(ignoringWords...)
 
 	return &Tokenizer{

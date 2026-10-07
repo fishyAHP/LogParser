@@ -23,6 +23,12 @@ const (
 	loadFactor = 87.5 / 100
 )
 
+const (
+	RecordLengthSize = 4 * Byte
+	RecordIdSize     = 8 * Byte
+	RecordHeaderSize = RecordLengthSize + RecordIdSize
+)
+
 func (f FileSize) String() string {
 	switch {
 	case f >= MByte:
@@ -145,12 +151,6 @@ func validateFileHeader(file *os.File) error {
 func (s *segment) isOverloaded(size FileSize) bool {
 	return float64(s.size+size)/float64(MaxSegmentSize) >= loadFactor
 }
-
-const (
-	RecordLengthSize = 4 * Byte
-	RecordIdSize     = 8 * Byte
-	RecordHeaderSize = RecordLengthSize + RecordIdSize
-)
 
 func (s *segment) write(data []byte, recordID uint64) (domain.RecordPointer, error) {
 	header := make([]byte, RecordHeaderSize)

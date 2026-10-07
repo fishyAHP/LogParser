@@ -36,7 +36,7 @@ type RangeIndex interface {
 
 type TextIndex interface {
 	Index
-	Search(domain.Value) (*structs.Set[domain.RecordID], error)
+	Search(domain.Value) (*structs.PostingList, error)
 }
 
 type Bound struct {

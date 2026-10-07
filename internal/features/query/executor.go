@@ -79,9 +79,9 @@ func (e *Executor) executeExpr(
 
 		switch ex.Operator {
 		case Or:
-			return structs.Union(left, right), nil
+			return structs.UnionSets(left, right), nil
 		case And:
-			return structs.Intersection(left, right), nil
+			return structs.IntersectionSets(left, right), nil
 		default:
 			return nil, fmt.Errorf("unexpected logical operator")
 		}

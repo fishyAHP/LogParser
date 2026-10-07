@@ -51,7 +51,7 @@ func (i *Index[K]) Add(
 		return common.ErrInvalidType
 	}
 	if _, ok := i.idx[newVal]; !ok {
-		i.idx[newVal] = structs.New[domain.RecordID](1)
+		i.idx[newVal] = structs.NewSet[domain.RecordID](1)
 	}
 	if i.idx[newVal].Add(record) {
 		i.count++

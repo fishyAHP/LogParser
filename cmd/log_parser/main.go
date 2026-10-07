@@ -16,7 +16,7 @@ import (
 )
 
 func main() {
-	c := New(os.Stdin, os.Stdout)
+	c := New(os.Stdin, os.Stdout, os.Stderr)
 	defer func() {
 		err := c.service.Close()
 		if err != nil {
@@ -46,11 +46,19 @@ func writeHeapProfile(path string) error {
 
 type Cli struct {
 	service *app.Service
-	in      io.Reader
-	out     io.Writer
+
+	in     io.Reader
+	out    io.Writer
+	errOut io.Writer
 }
 
-func New(in io.Reader, out io.Writer) *Cli {
+var ErrUnknownCommand = errors.New("unknown command")
+
+func New(
+	in io.Reader,
+	out io.Writer,
+	errOut io.Writer,
+) *Cli {
 	service, _ := app.NewService(&domain.Scheme{
 		Separator: ',',
 		Parameters: []domain.Field{
@@ -79,6 +87,7 @@ func New(in io.Reader, out io.Writer) *Cli {
 		service: service,
 		in:      in,
 		out:     out,
+		errOut:  errOut,
 	}
 }
 
@@ -95,6 +104,10 @@ func (c *Cli) Run() error {
 
 		exit, err := c.execute(line)
 		if err != nil {
+			if errors.Is(err, ErrUnknownCommand) {
+				fmt.Fprint(c.errOut, err.Error()+"\n")
+				continue
+			}
 			return err
 		}
 		if exit {
@@ -119,8 +132,10 @@ func (c *Cli) execute(line string) (bool, error) {
 	case "exit":
 		return true, nil
 	default:
+
 		return false, fmt.Errorf(
-			"unknown command: %q",
+			"%w: %q",
+			ErrUnknownCommand,
 			command,
 		)
 	}

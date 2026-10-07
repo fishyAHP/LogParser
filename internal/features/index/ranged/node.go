@@ -23,7 +23,7 @@ type node[K comparable] struct {
 }
 
 func newNode[K comparable](key K, value domain.RecordID) *node[K] {
-	s := structs.New[domain.RecordID](0)
+	s := structs.NewSet[domain.RecordID](0)
 	s.Add(value)
 
 	return &node[K]{

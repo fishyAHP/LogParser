@@ -49,7 +49,7 @@ func (i *Index[K]) Range(
 		return nil, common.ErrNotFoundRecord
 	}
 
-	s := structs.New[domain.RecordID](len(records))
+	s := structs.NewSet[domain.RecordID](len(records))
 	s.AddMany(records...)
 
 	return s, nil
