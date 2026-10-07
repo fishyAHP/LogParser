@@ -198,7 +198,7 @@ func (l *Lexer) toLexeme(s string) Lexeme {
 	} else if _, err = strconv.ParseBool(s); err == nil {
 		lexeme.Type = Bool
 	} else {
-		lexeme.Type = String
+		lexeme.Type = Identifier
 	}
 
 	lexeme.Literal = s

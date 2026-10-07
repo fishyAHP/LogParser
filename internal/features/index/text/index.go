@@ -5,7 +5,7 @@ import (
 
 	"fishyAHP/LogParser.git/internal/core/domain"
 	"fishyAHP/LogParser.git/internal/features/index/common"
-	"fishyAHP/LogParser.git/internal/features/index/set"
+	"fishyAHP/LogParser.git/internal/features/index/structs"
 	"fishyAHP/LogParser.git/internal/features/index/text/words"
 )
 
@@ -14,7 +14,7 @@ type Index struct {
 	invert    invertIndex
 	Tokenizer *words.Tokenizer
 }
-type invertIndex = map[words.Token]*set.Set[domain.RecordData]
+type invertIndex = map[words.Token]*structs.PostingList
 
 func New() *Index {
 	return &Index{
@@ -23,7 +23,7 @@ func New() *Index {
 	}
 }
 
-func (i *Index) Search(value domain.Value) (*set.Set[domain.RecordData], error) {
+func (i *Index) Search(value domain.Value) (*structs.PostingList, error) {
 	strVal, ok := value.(domain.StringValue)
 	if !ok {
 		return nil, common.ErrInvalidType
@@ -33,23 +33,23 @@ func (i *Index) Search(value domain.Value) (*set.Set[domain.RecordData], error) 
 	if res == nil {
 		return nil, common.ErrNotFoundRecord
 	}
-	return res.Clone(), nil
+	return res, nil
 }
 
-func (i *Index) Add(value domain.Value, record domain.RecordData) error {
+func (i *Index) Add(value domain.Value, record domain.RecordID) error {
 	strVal, ok := value.(domain.StringValue)
 	if !ok {
 		return common.ErrInvalidType
 	}
 
 	tokens := i.Tokenizer.Tokenize(string(strVal))
-	sett := set.New[words.Token](len(tokens))
+	sett := structs.NewSet[words.Token](len(tokens))
 	sett.AddMany(tokens...)
 	tokens = sett.Slice()
 
 	for _, token := range tokens {
 		if _, ok := i.invert[token]; !ok {
-			i.invert[token] = set.New[domain.RecordData](1)
+			i.invert[token] = structs.NewPostingLists(1)
 		}
 
 		if i.invert[token].Add(record) {
@@ -60,19 +60,19 @@ func (i *Index) Add(value domain.Value, record domain.RecordData) error {
 	return nil
 }
 
-func (i *Index) get(s string) *set.Set[domain.RecordData] {
+func (i *Index) get(s string) *structs.PostingList {
 	tokens := i.Tokenizer.Tokenize(s)
-	sets := make([]*set.Set[domain.RecordData], 0, len(tokens))
+	lists := make([]*structs.PostingList, 0, len(tokens))
 
 	for _, token := range tokens {
-		if sett, ok := i.invert[token]; ok {
-			sets = append(sets, sett)
+		if list, ok := i.invert[token]; ok {
+			lists = append(lists, list)
 		} else {
 			return nil
 		}
 	}
 
-	slices.SortFunc(sets, func(a, b *set.Set[domain.RecordData]) int {
+	slices.SortFunc(lists, func(a, b *structs.PostingList) int {
 		if a.Len() > b.Len() {
 			return 1
 		}
@@ -82,15 +82,14 @@ func (i *Index) get(s string) *set.Set[domain.RecordData] {
 		return 0
 	})
 
-	if len(sets) < 1 {
+	if len(lists) < 1 {
 		return nil
 	}
 	start := 1
-	res := set.New[domain.RecordData](sets[0].Len())
-	res.AddMany(sets[0].Slice()...)
+	res := lists[0]
 
-	for j := start; j < len(sets); j++ {
-		res = set.Intersection(res, sets[j])
+	for j := start; j < len(lists); j++ {
+		res = structs.IntersectionLists(res, lists[j])
 
 		if res.Len() == 0 {
 			return nil
@@ -102,7 +101,7 @@ func (i *Index) get(s string) *set.Set[domain.RecordData] {
 
 func (i *Index) Remove(
 	s domain.Value,
-	data domain.RecordData) error {
+	data domain.RecordID) error {
 	keys, ok := s.(domain.StringValue)
 	if !ok {
 		return common.ErrInvalidType
@@ -112,11 +111,8 @@ func (i *Index) Remove(
 	var isChanged bool
 	for _, token := range tokens {
 		if posting, ok := i.invert[token]; ok {
-			if !isChanged {
-				isChanged = true
-			}
-
 			if posting.Remove(data) {
+				isChanged = true
 				i.count--
 			}
 			if posting.Len() == 0 {

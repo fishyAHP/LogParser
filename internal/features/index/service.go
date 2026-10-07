@@ -6,7 +6,7 @@ import (
 
 	"fishyAHP/LogParser.git/internal/core/domain"
 	"fishyAHP/LogParser.git/internal/features/index/common"
-	"fishyAHP/LogParser.git/internal/features/index/set"
+	"fishyAHP/LogParser.git/internal/features/index/structs"
 )
 
 var (
@@ -45,18 +45,18 @@ func newFieldIndex(field domain.Field) (common.Index, error) {
 	case domain.NoIndex:
 		return nil, nil
 	case domain.HashIndex:
-		return newHashIndex(field)
+		return newHashIndex(field.FieldType)
 	case domain.TextIndex:
-		return newTextIndex(field)
+		return newTextIndex(field.FieldType)
 	case domain.RangeIndex:
-		return newRangeIndex(field)
+		return newRangeIndex(field.FieldType)
 	default:
 		return nil, ErrUnknownIndexType
 	}
 }
 
 func (s *Service) Index(
-	record domain.RecordData,
+	record domain.RecordID,
 	entry domain.LogEntry,
 ) error {
 	if len(entry.Values) != len(s.Scheme.Parameters) {
@@ -85,7 +85,7 @@ func (s *Service) Index(
 func (s *Service) Exact(
 	fieldName string,
 	value domain.Value,
-) (*set.Set[domain.RecordData], error) {
+) (*structs.PostingList, error) {
 	idx, ok := s.indexes[fieldName]
 	if !ok {
 		return nil, ErrIndexNotFound
@@ -110,7 +110,7 @@ func (s *Service) Exact(
 func (s *Service) Range(
 	fieldName string,
 	from, to *common.Bound,
-) (*set.Set[domain.RecordData], error) {
+) (*structs.PostingList, error) {
 	idx, ok := s.indexes[fieldName]
 	if !ok {
 		return nil, ErrIndexNotFound

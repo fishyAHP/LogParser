@@ -1,8 +1,10 @@
 package ranged
 
 import (
+	"slices"
+
 	"fishyAHP/LogParser.git/internal/core/domain"
-	"fishyAHP/LogParser.git/internal/features/index/set"
+	"fishyAHP/LogParser.git/internal/features/index/structs"
 
 	"fishyAHP/LogParser.git/internal/features/index/common"
 )
@@ -10,7 +12,6 @@ import (
 type Index[K common.Key] struct {
 	tree *rbTree[K]
 }
-
 type localBound[K common.Key] struct {
 	value     K
 	inclusive bool
@@ -18,7 +19,7 @@ type localBound[K common.Key] struct {
 
 func (i *Index[K]) Range(
 	from, to *common.Bound,
-) (*set.Set[domain.RecordData], error) {
+) (*structs.PostingList, error) {
 	var (
 		fromBound *localBound[K]
 		toBound   *localBound[K]
@@ -45,20 +46,18 @@ func (i *Index[K]) Range(
 		}
 	}
 
-	records, ok := i.tree.innerRange(fromBound, toBound)
+	res, ok := i.tree.innerRange(fromBound, toBound)
 	if !ok {
 		return nil, common.ErrNotFoundRecord
 	}
 
-	s := set.New[domain.RecordData](len(records))
-	s.AddMany(records...)
-
-	return s, nil
+	slices.Sort(res)
+	return structs.NewPostingFromSorted(res), nil
 }
 
 func (i *Index[K]) Exact(
 	value domain.Value,
-) (*set.Set[domain.RecordData], error) {
+) (*structs.PostingList, error) {
 	key, ok := value.(K)
 	if !ok {
 		return nil, common.ErrInvalidType
@@ -73,7 +72,7 @@ func (i *Index[K]) Exact(
 
 func (i *Index[K]) Add(
 	value domain.Value,
-	record domain.RecordData,
+	record domain.RecordID,
 ) error {
 	key, ok := value.(K)
 	if !ok {
@@ -90,7 +89,7 @@ func New[K common.Key](comparator func(K, K) int) *Index[K] {
 
 func (i *Index[K]) Remove(
 	value domain.Value,
-	data domain.RecordData,
+	data domain.RecordID,
 ) error {
 	key, ok := value.(K)
 	if !ok {
@@ -104,30 +103,38 @@ func (i *Index[K]) Remove(
 	return nil
 }
 
-func (i *Index[K]) Min() *set.Set[domain.RecordData] {
+func (i *Index[K]) Min() *structs.PostingList {
 	if i.tree.len() == 0 {
 		return nil
 	}
 	if i.tree.len() == 1 {
-		return i.tree.root.records
+		return i.tree.root.
+			records.
+			toPosting()
 	}
 
 	minNode := i.tree.min()
 
-	return minNode.records
+	return minNode.
+		records.
+		toPosting()
 }
 
-func (i *Index[K]) Max() *set.Set[domain.RecordData] {
+func (i *Index[K]) Max() *structs.PostingList {
 	if i.tree.len() == 0 {
 		return nil
 	}
 	if i.tree.len() == 1 {
-		return i.tree.root.records
+		return i.tree.root.
+			records.
+			toPosting()
 	}
 
 	maxNode := i.tree.max()
 
-	return maxNode.records.Clone()
+	return maxNode.
+		records.
+		toPosting()
 }
 
 func (i *Index[K]) Len() int {

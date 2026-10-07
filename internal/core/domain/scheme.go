@@ -17,6 +17,19 @@ type Field struct {
 	IndexType IndexType
 }
 
+type Format uint8
+
+const (
+	JSON Format = iota
+	Txt
+	Csv
+	Log
+	Yaml
+	Bin
+	Tsv
+	Syslog
+)
+
 type DataType uint8
 
 const (
