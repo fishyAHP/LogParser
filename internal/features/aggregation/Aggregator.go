@@ -9,19 +9,19 @@ import (
 	"fishyAHP/LogParser.git/internal/features/index/structs"
 )
 
-type Service struct {
-	indexes *index.Service
+type Aggregator struct {
+	indexes *index.Manager
 }
 
-func (s *Service) Count(posting *structs.PostingList) int {
+func (a *Aggregator) Count(posting *structs.PostingList) int {
 	return posting.Len()
 }
 
-func (s *Service) GroupBy(
+func (a *Aggregator) GroupBy(
 	idxName string,
 	postings *structs.PostingList,
 ) (common.Groups, error) {
-	grouper, err := s.indexes.Grouper(idxName)
+	grouper, err := a.indexes.Grouper(idxName)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"index grouper: %w",
@@ -47,11 +47,11 @@ type CountStat struct {
 
 type CountStats []CountStat
 
-func (s *Service) CountBy(
+func (a *Aggregator) CountBy(
 	idxName string,
 	postings *structs.PostingList,
 ) (CountStats, error) {
-	groups, err := s.GroupBy(idxName, postings)
+	groups, err := a.GroupBy(idxName, postings)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"group by: %w",
@@ -70,11 +70,11 @@ func (s *Service) CountBy(
 	return stats, nil
 }
 
-func (s *Service) Min(
+func (a *Aggregator) Min(
 	idxName string,
 	posting *structs.PostingList,
 ) (domain.Value, error) {
-	aggregator, err := s.indexes.Aggregator(idxName)
+	aggregator, err := a.indexes.Aggregator(idxName)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"find aggregator: %w",
@@ -85,11 +85,11 @@ func (s *Service) Min(
 	return aggregator.Min(posting)
 }
 
-func (s *Service) Max(
+func (a *Aggregator) Max(
 	idxName string,
 	posting *structs.PostingList,
 ) (domain.Value, error) {
-	aggregator, err := s.indexes.Aggregator(idxName)
+	aggregator, err := a.indexes.Aggregator(idxName)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"find aggregator: %w",

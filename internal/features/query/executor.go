@@ -10,12 +10,12 @@ import (
 )
 
 type Executor struct {
-	indexes  *index.Service
+	indexes  *index.Manager
 	syntax   *Syntaxes
 	semantic *SemanticAnalyzer
 }
 
-func NewExecutor(indexes *index.Service) *Executor {
+func NewExecutor(indexes *index.Manager) *Executor {
 	return &Executor{
 		indexes: indexes,
 		syntax: NewSyntaxes(

@@ -423,3 +423,111 @@ func TestStorageRotationRecovery(t *testing.T) {
 		}
 	}
 }
+
+func TestStorageWriteAfterRecovery(t *testing.T) {
+	dir := t.TempDir()
+
+	type testRecord struct {
+		id   domain.RecordID
+		data []byte
+	}
+
+	const recordsCount = 200
+
+	records := make([]testRecord, 0, recordsCount)
+	usedIDs := make(map[domain.RecordID]struct{})
+
+	openStorage := func() *Storage {
+		t.Helper()
+
+		s, err := New(dir)
+		if err != nil {
+			t.Fatalf("open storage: %v", err)
+		}
+
+		return s
+	}
+
+	writeRecords := func(s *Storage, from, to int) {
+		t.Helper()
+
+		for i := from; i < to; i++ {
+			data := []byte(fmt.Sprintf("test record %d", i))
+
+			id, err := s.Write(data)
+			if err != nil {
+				t.Fatalf("write record %d: %v", i, err)
+			}
+
+			if _, exists := usedIDs[id]; exists {
+				t.Fatalf("duplicate RecordID: %d", id)
+			}
+
+			usedIDs[id] = struct{}{}
+
+			records = append(records, testRecord{
+				id:   id,
+				data: data,
+			})
+		}
+	}
+
+	checkRecords := func(s *Storage) {
+		t.Helper()
+
+		for _, expected := range records {
+			actual, err := s.ReadByID(expected.id)
+			if err != nil {
+				t.Fatalf(
+					"read record %d: %v",
+					expected.id,
+					err,
+				)
+			}
+
+			if !bytes.Equal(actual, expected.data) {
+				t.Fatalf(
+					"record %d: expected %q, got %q",
+					expected.id,
+					expected.data,
+					actual,
+				)
+			}
+		}
+	}
+
+	closeStorage := func(s *Storage) {
+		t.Helper()
+
+		if err := s.Close(); err != nil {
+			t.Fatalf("close storage: %v", err)
+		}
+	}
+
+	// Первый запуск: записываем 100 записей.
+	s := openStorage()
+	writeRecords(s, 0, 100)
+	closeStorage(s)
+
+	// Первый перезапуск: проверяем старые записи
+	// и добавляем ещё 100.
+	s = openStorage()
+	checkRecords(s)
+	writeRecords(s, 100, 200)
+	checkRecords(s)
+	closeStorage(s)
+
+	// Второй перезапуск: проверяем все 200 записей.
+	s = openStorage()
+	defer closeStorage(s)
+
+	checkRecords(s)
+
+	if len(usedIDs) != recordsCount {
+		t.Fatalf(
+			"expected %d unique RecordIDs, got %d",
+			recordsCount,
+			len(usedIDs),
+		)
+	}
+}

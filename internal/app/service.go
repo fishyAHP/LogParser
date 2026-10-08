@@ -15,7 +15,7 @@ import (
 )
 
 type Service struct {
-	index    *index.Service
+	index    *index.Manager
 	executor *query.Executor
 	parser   *parse.LogParser
 	store    *storage.Storage
@@ -45,18 +45,19 @@ func newService(
 	format domain.Format,
 	storagePath string,
 ) (*Service, error) {
-	idx, err := index.New(scheme)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"new index: %w",
-			err,
-		)
-	}
-
 	store, err := storage.New(storagePath)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"new storage: %w",
+			err,
+		)
+	}
+
+	idx, err := index.New(scheme)
+	if err != nil {
+		_ = store.Close()
+		return nil, fmt.Errorf(
+			"new index: %w",
 			err,
 		)
 	}

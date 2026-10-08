@@ -17,13 +17,13 @@ var (
 	ErrNotAggregator       = errors.New("index doesn't support aggregating")
 )
 
-type Service struct {
+type Manager struct {
 	Scheme  *domain.Scheme
 	indexes map[string]common.Index
 }
 
-func New(scheme *domain.Scheme) (*Service, error) {
-	service := &Service{
+func New(scheme *domain.Scheme) (*Manager, error) {
+	service := &Manager{
 		Scheme:  scheme,
 		indexes: make(map[string]common.Index, len(scheme.Parameters)),
 	}
@@ -57,22 +57,22 @@ func newFieldIndex(field domain.Field) (common.Index, error) {
 	}
 }
 
-func (s *Service) Index(
+func (m *Manager) Index(
 	record domain.RecordID,
 	entry domain.LogEntry,
 ) error {
-	if len(entry.Values) != len(s.Scheme.Parameters) {
+	if len(entry.Values) != len(m.Scheme.Parameters) {
 		return fmt.Errorf(
 			"entry values count doesn't match Scheme: got %d, want %d",
 			len(entry.Values),
-			len(s.Scheme.Parameters),
+			len(m.Scheme.Parameters),
 		)
 	}
 
 	for i, value := range entry.Values {
-		field := s.Scheme.Parameters[i]
+		field := m.Scheme.Parameters[i]
 
-		if idx, ok := s.indexes[field.Name]; ok {
+		if idx, ok := m.indexes[field.Name]; ok {
 			if err := idx.Add(value, record); err != nil {
 				return fmt.Errorf("index field %q: %w",
 					field.Name,
@@ -84,11 +84,11 @@ func (s *Service) Index(
 	return nil
 }
 
-func (s *Service) Exact(
+func (m *Manager) Exact(
 	fieldName string,
 	value domain.Value,
 ) (*structs.PostingList, error) {
-	idx, ok := s.indexes[fieldName]
+	idx, ok := m.indexes[fieldName]
 	if !ok {
 		return nil, ErrIndexNotFound
 	}
@@ -109,11 +109,11 @@ func (s *Service) Exact(
 	return res, nil
 }
 
-func (s *Service) Range(
+func (m *Manager) Range(
 	fieldName string,
 	from, to *common.Bound,
 ) (*structs.PostingList, error) {
-	idx, ok := s.indexes[fieldName]
+	idx, ok := m.indexes[fieldName]
 	if !ok {
 		return nil, ErrIndexNotFound
 	}
@@ -129,16 +129,16 @@ func (s *Service) Range(
 	return rangeIdx.Range(from, to)
 }
 
-func (s *Service) Clear() {
-	for _, idx := range s.indexes {
+func (m *Manager) Clear() {
+	for _, idx := range m.indexes {
 		idx.Clear()
 	}
 }
 
-func (s *Service) Grouper(
+func (m *Manager) Grouper(
 	name string,
 ) (common.Grouper, error) {
-	idx, ok := s.indexes[name]
+	idx, ok := m.indexes[name]
 	if !ok {
 		return nil, fmt.Errorf(
 			"%w: %q",
@@ -159,10 +159,10 @@ func (s *Service) Grouper(
 	return grouper, nil
 }
 
-func (s *Service) Aggregator(
+func (m *Manager) Aggregator(
 	name string,
 ) (common.Aggregator, error) {
-	idx, ok := s.indexes[name]
+	idx, ok := m.indexes[name]
 	if !ok {
 		return nil, fmt.Errorf(
 			"%w: %q",
