@@ -33,7 +33,7 @@ func (i *Index[K]) Exact(
 	}
 	s, ok := i.idx[newVal]
 	if !ok {
-		return nil, common.ErrNotFoundRecord
+		return nil, common.ErrRecordNotFound
 	}
 
 	return s, nil
@@ -82,7 +82,7 @@ func (i *Index[K]) Remove(
 		}
 		return nil
 	}
-	return common.ErrNotFoundRecord
+	return common.ErrRecordNotFound
 }
 
 func (i *Index[K]) Len() int {
@@ -98,4 +98,26 @@ func (i *Index[K]) Clear() {
 
 	i.idx = make(map[K]*structs.PostingList)
 	i.count = 0
+}
+
+func (i *Index[K]) Group(
+	posting *structs.PostingList,
+) (common.Groups, error) {
+	groups := make(common.Groups, 0, len(i.idx))
+
+	for k, v := range i.idx {
+		res := structs.IntersectionLists(posting, v)
+
+		if res.Len() > 0 {
+			groups = append(groups, common.Group{
+				Value:   k,
+				Records: res,
+			})
+		}
+	}
+
+	if len(groups) == 0 {
+		return nil, common.ErrRecordNotFound
+	}
+	return groups, nil
 }

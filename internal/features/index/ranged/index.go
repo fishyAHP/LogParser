@@ -12,6 +12,13 @@ import (
 type Index[K common.Key] struct {
 	tree *rbTree[K]
 }
+
+func New[K common.Key](comparator func(K, K) int) *Index[K] {
+	return &Index[K]{
+		tree: newRBTree(comparator),
+	}
+}
+
 type localBound[K common.Key] struct {
 	value     K
 	inclusive bool
@@ -48,7 +55,7 @@ func (i *Index[K]) Range(
 
 	res, ok := i.tree.innerRange(fromBound, toBound)
 	if !ok {
-		return nil, common.ErrNotFoundRecord
+		return nil, common.ErrRecordNotFound
 	}
 
 	slices.Sort(res)
@@ -65,7 +72,7 @@ func (i *Index[K]) Exact(
 
 	res, ok := i.tree.find(key)
 	if !ok {
-		return nil, common.ErrNotFoundRecord
+		return nil, common.ErrRecordNotFound
 	}
 	return res, nil
 }
@@ -81,12 +88,6 @@ func (i *Index[K]) Add(
 	return i.tree.insert(key, record)
 }
 
-func New[K common.Key](comparator func(K, K) int) *Index[K] {
-	return &Index[K]{
-		tree: newRBTree(comparator),
-	}
-}
-
 func (i *Index[K]) Remove(
 	value domain.Value,
 	data domain.RecordID,
@@ -98,29 +99,25 @@ func (i *Index[K]) Remove(
 
 	deleted := i.tree.remove(key, data)
 	if !deleted {
-		return common.ErrNotFoundRecord
+		return common.ErrRecordNotFound
 	}
 	return nil
 }
 
-func (i *Index[K]) Min() *structs.PostingList {
+func (i *Index[K]) minNode() *node[K] {
 	if i.tree.len() == 0 {
 		return nil
 	}
 	if i.tree.len() == 1 {
-		return i.tree.root.
-			records.
-			toPosting()
+		return i.tree.root
 	}
 
 	minNode := i.tree.min()
 
-	return minNode.
-		records.
-		toPosting()
+	return minNode
 }
 
-func (i *Index[K]) Max() *structs.PostingList {
+func (i *Index[K]) maxNode() *structs.PostingList {
 	if i.tree.len() == 0 {
 		return nil
 	}
@@ -143,4 +140,54 @@ func (i *Index[K]) Len() int {
 
 func (i *Index[K]) Clear() {
 	i.tree.clear()
+}
+
+func (i *Index[K]) Min(
+	posting *structs.PostingList,
+) (domain.Value, error) {
+	return i.tree.extremum(
+		posting,
+		ascending,
+	)
+}
+
+func (i *Index[K]) Max(
+	posting *structs.PostingList,
+) (domain.Value, error) {
+	return i.tree.extremum(
+		posting,
+		descending,
+	)
+}
+
+func (i *Index[K]) Avg(
+	posting *structs.PostingList,
+) (domain.Value, error) {
+	var (
+		count int
+		sum   domain.FloatValue
+	)
+
+	i.tree.forEach(posting, func(
+		value domain.Value,
+		length int,
+	) bool {
+
+		switch v := value.(type) {
+		case domain.FloatValue:
+			count += length
+			sum += domain.FloatValue(length) * v
+		case domain.IntValue:
+			count += length
+			sum += domain.FloatValue(length) * domain.FloatValue(v)
+		}
+
+		return count < posting.Len()
+	})
+
+	if count == 0 {
+		return nil, common.ErrRecordNotFound
+	}
+
+	return sum / domain.FloatValue(count), nil
 }

@@ -112,3 +112,15 @@ func (r *records) slice() []domain.RecordID {
 	}
 	return r.many.Slice()
 }
+
+func (r *records) contains(id domain.RecordID) bool {
+	if r.single == 0 &&
+		r.many == nil {
+		return false
+	}
+
+	if r.many == nil {
+		return r.single == id
+	}
+	return r.many.Contains(id)
+}

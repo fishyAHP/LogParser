@@ -31,7 +31,7 @@ func (i *Index) Search(value domain.Value) (*structs.PostingList, error) {
 
 	res := i.get(string(strVal))
 	if res == nil {
-		return nil, common.ErrNotFoundRecord
+		return nil, common.ErrRecordNotFound
 	}
 	return res, nil
 }
@@ -122,7 +122,7 @@ func (i *Index) Remove(
 	}
 
 	if !isChanged {
-		return common.ErrNotFoundRecord
+		return common.ErrRecordNotFound
 	}
 	return nil
 }

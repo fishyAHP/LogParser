@@ -285,8 +285,10 @@ func (t *rbTree[K]) len() int {
 
 func (t *rbTree[K]) height() int {
 	return int(
-		2 * math.Log2(
-			float64(t.nodesCount+1),
+		math.Ceil(
+			2 * math.Log2(
+				float64(t.nodesCount+1),
+			),
 		),
 	)
 }
@@ -319,4 +321,86 @@ func (t *rbTree[K]) clear() {
 
 func (t *rbTree[K]) remove(key K, value domain.RecordID) bool {
 	return false
+}
+
+type direction uint8
+
+const (
+	ascending direction = iota
+	descending
+)
+
+func (t *rbTree[K]) extremum(
+	posting *structs.PostingList,
+	direction direction,
+) (domain.Value, error) {
+	stack := make([]*node[K], 0, t.height())
+	current := t.root
+
+	for current != nil ||
+		len(stack) != 0 {
+
+		for current != nil {
+			stack = append(stack, current)
+
+			switch direction {
+			case ascending:
+				current = current.left
+			case descending:
+				current = current.right
+			}
+		}
+
+		current = stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+
+		if structs.IsListIntersects(
+			current.records.toPosting(),
+			posting,
+		) {
+			return current.key, nil
+		}
+
+		switch direction {
+		case ascending:
+			current = current.right
+		case descending:
+			current = current.left
+		}
+	}
+
+	return nil, common.ErrRecordNotFound
+}
+
+func (t *rbTree[K]) forEach(
+	posting *structs.PostingList,
+	visit func(
+		value domain.Value,
+		count int,
+	) bool) {
+	queue := append(
+		make([]*node[K], 0, t.height()),
+		t.root,
+	)
+
+	for len(queue) > 0 {
+		front := queue[0]
+		queue = queue[1:]
+
+		matches := structs.CountListIntersections(
+			front.records.toPosting(),
+			posting,
+		)
+
+		if !visit(front.key, matches) {
+			return
+		}
+
+		if front.left != nil {
+			queue = append(queue, front.left)
+		}
+		if front.right != nil {
+			queue = append(queue, front.right)
+		}
+	}
 }

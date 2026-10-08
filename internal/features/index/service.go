@@ -13,6 +13,8 @@ var (
 	ErrIndexNotFound       = errors.New("index wasn't found")
 	ErrUnsupportedOperator = errors.New("unsupported operator")
 	ErrUnknownIndexType    = errors.New("unknown index type in field")
+	ErrNotGrouper          = errors.New("index doesn't support grouping")
+	ErrNotAggregator       = errors.New("index doesn't support aggregating")
 )
 
 type Service struct {
@@ -72,7 +74,7 @@ func (s *Service) Index(
 
 		if idx, ok := s.indexes[field.Name]; ok {
 			if err := idx.Add(value, record); err != nil {
-				return fmt.Errorf("index field %s: %w",
+				return fmt.Errorf("index field %q: %w",
 					field.Name,
 					err,
 				)
@@ -131,4 +133,52 @@ func (s *Service) Clear() {
 	for _, idx := range s.indexes {
 		idx.Clear()
 	}
+}
+
+func (s *Service) Grouper(
+	name string,
+) (common.Grouper, error) {
+	idx, ok := s.indexes[name]
+	if !ok {
+		return nil, fmt.Errorf(
+			"%w: %q",
+			ErrIndexNotFound,
+			name,
+		)
+	}
+
+	grouper, ok := idx.(common.Grouper)
+	if !ok {
+		return nil, fmt.Errorf(
+			"%w: %q",
+			ErrNotGrouper,
+			name,
+		)
+	}
+
+	return grouper, nil
+}
+
+func (s *Service) Aggregator(
+	name string,
+) (common.Aggregator, error) {
+	idx, ok := s.indexes[name]
+	if !ok {
+		return nil, fmt.Errorf(
+			"%w: %q",
+			ErrIndexNotFound,
+			name,
+		)
+	}
+
+	aggregator, ok := idx.(common.Aggregator)
+	if !ok {
+		return nil, fmt.Errorf(
+			"%w: %q",
+			ErrNotGrouper,
+			name,
+		)
+	}
+
+	return aggregator, nil
 }

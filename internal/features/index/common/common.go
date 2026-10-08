@@ -9,7 +9,7 @@ import (
 
 var (
 	ErrInvalidType    = errors.New("invalid value type")
-	ErrNotFoundRecord = errors.New("not found record")
+	ErrRecordNotFound = errors.New("record not found")
 )
 
 type Key interface {
@@ -38,6 +38,24 @@ type TextIndex interface {
 	Index
 	Search(domain.Value) (*structs.PostingList, error)
 }
+
+type Grouper interface {
+	Group(*structs.PostingList) (Groups, error)
+}
+
+type Aggregator interface {
+	Min(*structs.PostingList) (domain.Value, error)
+	Max(*structs.PostingList) (domain.Value, error)
+	Avg(*structs.PostingList) (domain.Value, error)
+	Sum(*structs.PostingList) (domain.Value, error)
+}
+
+type Group struct {
+	Value   domain.Value
+	Records *structs.PostingList
+}
+
+type Groups []Group
 
 type Bound struct {
 	Value     domain.Value

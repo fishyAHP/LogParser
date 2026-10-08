@@ -89,7 +89,7 @@ func (e *Executor) executeExpr(
 		case Equal:
 			res, err := e.indexes.Exact(ex.Field, ex.Value)
 			if err != nil {
-				if errors.Is(err, common.ErrNotFoundRecord) {
+				if errors.Is(err, common.ErrRecordNotFound) {
 					return &structs.PostingList{}, nil
 				}
 				return nil, fmt.Errorf(
@@ -106,7 +106,7 @@ func (e *Executor) executeExpr(
 
 			posting, err := e.indexes.Range(ex.Field, nil, right)
 			if err != nil {
-				if errors.Is(err, common.ErrNotFoundRecord) {
+				if errors.Is(err, common.ErrRecordNotFound) {
 					return &structs.PostingList{}, nil
 				}
 				return nil, fmt.Errorf(
@@ -123,7 +123,7 @@ func (e *Executor) executeExpr(
 
 			posting, err := e.indexes.Range(ex.Field, left, nil)
 			if err != nil {
-				if errors.Is(err, common.ErrNotFoundRecord) {
+				if errors.Is(err, common.ErrRecordNotFound) {
 					return &structs.PostingList{}, nil
 				}
 				return nil, fmt.Errorf(
