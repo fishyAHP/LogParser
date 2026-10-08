@@ -45,7 +45,7 @@ func TestIterator_Next(t *testing.T) {
 	for j := range logs {
 		if !bytes.Equal(got[j], logs[j]) {
 			t.Errorf(
-				"record %d: expected %q, got %q",
+				"id %d: expected %q, got %q",
 				j,
 				logs[j],
 				got[j],
@@ -73,10 +73,10 @@ func TestIterator_RecordData(t *testing.T) {
 	it := s.Iterator()
 
 	if !it.Next() {
-		t.Fatalf("expected record, iterator error: %v", it.Err())
+		t.Fatalf("expected id, iterator error: %v", it.Err())
 	}
 
-	got := it.Record()
+	got := it.RecordID()
 
 	if got.ID != written.ID {
 		t.Errorf("expected ID %d, got %d", written.ID, got.ID)
@@ -123,7 +123,7 @@ func TestIterator_AfterDone(t *testing.T) {
 	it := s.Iterator()
 
 	if !it.Next() {
-		t.Fatalf("expected first record: %v", it.Err())
+		t.Fatalf("expected first id: %v", it.Err())
 	}
 
 	if it.Next() {

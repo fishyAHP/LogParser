@@ -67,7 +67,7 @@ func TestStorage_Write(t *testing.T) {
 
 	t.Run("storage write", func(t *testing.T) {
 		if rd == nil {
-			t.Fatal("record data is nil")
+			t.Fatal("id data is nil")
 		}
 
 		if rd.Pointer.Length != uint32(len(data)) {
@@ -80,7 +80,7 @@ func TestStorage_Write(t *testing.T) {
 
 		if rd.Pointer.SegmentID != s.writeSegment.ID {
 			t.Errorf(
-				"record belongs to segment %d, writer is %d",
+				"id belongs to segment %d, writer is %d",
 				rd.Pointer.SegmentID,
 				s.writeSegment.ID,
 			)
@@ -153,7 +153,7 @@ func TestStorage_WriteReadMultiple(t *testing.T) {
 
 		if !bytes.Equal(actual, data[i]) {
 			t.Errorf(
-				"record %d: expected %q, got %q",
+				"id %d: expected %q, got %q",
 				i,
 				data[i],
 				actual,
@@ -263,7 +263,7 @@ func TestStorage_ReadOldRecordAfterRotation(t *testing.T) {
 
 	actual, err := s.Read(rd)
 	if err != nil {
-		t.Fatalf("read old record: %v", err)
+		t.Fatalf("read old id: %v", err)
 	}
 
 	if !bytes.Equal(actual, expected) {

@@ -72,8 +72,8 @@ func otherSet[K comparable](
 func forEachIntersectLists(
 	s1, s2 *PostingList,
 	visit func(
-	id domain.RecordID,
-) bool) {
+		id domain.RecordID,
+	) bool) {
 	i, j := 0, 0
 
 	for i < s1.Len() && j < s2.Len() {

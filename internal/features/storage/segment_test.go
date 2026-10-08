@@ -38,7 +38,7 @@ func TestSegment_WriteRead(t *testing.T) {
 
 	if record.Pointer.Length != uint32(len(want)) {
 		t.Fatalf(
-			"unexpected record length: want %d, got %d",
+			"unexpected id length: want %d, got %d",
 			len(want),
 			record.Pointer.Length,
 		)
@@ -74,12 +74,12 @@ func TestSegment_WriteReadMultiple(t *testing.T) {
 	for i, record := range records {
 		got, err := seg.read(record)
 		if err != nil {
-			t.Fatalf("read record %d: %v", i, err)
+			t.Fatalf("read id %d: %v", i, err)
 		}
 
 		if !bytes.Equal(got, input[i]) {
 			t.Fatalf(
-				"record %d mismatch:\nwant: %q\ngot:  %q",
+				"id %d mismatch:\nwant: %q\ngot:  %q",
 				i,
 				input[i],
 				got,

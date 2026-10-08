@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
@@ -27,56 +28,145 @@ type Storage struct {
 }
 
 var (
+	readFlag  = os.O_RDONLY
+	writeFlag = os.O_CREATE | os.O_WRONLY | os.O_APPEND
+)
+
+var (
+	ErrRecordTooLarge = errors.New("id too large")
 	ErrClosedStorage  = errors.New("closed storage")
-	ErrRecordNotFound = errors.New("record not found")
+	ErrRecordNotFound = errors.New("id not found")
 )
 
 func New(path string) (*Storage, error) {
 	err := os.MkdirAll(path, 0o755)
 	if err != nil {
-		return nil, fmt.Errorf("mk dir all: %w", err)
+		return nil, fmt.Errorf(
+			"mk dir all: %w",
+			err,
+		)
 	}
 
-	// os.ReadDir возвращает отсортированный слайс директорий или файлов.
-	// В нашем случае в качестве аргумента передается путь формата: 2006-01-02/15
-	entries, err := os.ReadDir(path)
+	storage := &Storage{
+		dir:         path,
+		records:     make([]domain.RecordPointer, 0),
+		readSegment: &segment{},
+	}
+
+	if err = storage.recover(); err != nil {
+		return nil, err
+	}
+
+	id, err := findLastSegment(path)
 	if err != nil {
-		return nil, fmt.Errorf("read dir: %w", err)
+		return nil, err
 	}
 
-	id := 1
-	if len(entries) != 0 {
-		// Последний элемент должен иметь название с самым большим индексом,
-		// так как слайс был отсортирован по названиям
-		last := entries[len(entries)-1]
-		id, err = strconv.Atoi(last.Name()[8:])
-
-		if err != nil {
-			return nil, fmt.Errorf("conversion string to int(atoi): %w", err)
-		}
-	}
-
-	writer, err := newSegment(path, uint64(id))
+	writer, err := newSegment(
+		path,
+		id,
+		writeFlag,
+	)
 	if err != nil {
-		return nil, fmt.Errorf("create new writer: %w", err)
+		return nil, fmt.Errorf(
+			"create new writer: %w",
+			err,
+		)
 	}
 
 	if writer.isOverloaded(0) {
 		if err = writer.close(); err != nil {
-			return nil, fmt.Errorf("close old writer: %w", err)
+			return nil, fmt.Errorf(
+				"close old writer: %w",
+				err,
+			)
 		}
 
-		if writer, err = newSegment(path, uint64(id+1)); err != nil {
-			return nil, fmt.Errorf("create not overloaded writer: %w", err)
+		if writer, err = newSegment(
+			path,
+			id+1,
+			writeFlag,
+		); err != nil {
+			return nil, fmt.Errorf(
+				"create not overloaded writer: %w",
+				err,
+			)
 		}
 	}
 
-	return &Storage{
-		dir:          path,
-		records:      make([]domain.RecordPointer, 0),
-		writeSegment: writer,
-		readSegment:  &segment{},
-	}, nil
+	storage.writeSegment = writer
+
+	return storage, nil
+}
+
+func findLastSegment(dir string) (uint64, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return 0, fmt.Errorf(
+			"read dir: %w",
+			err,
+		)
+	}
+
+	maxID := uint64(1)
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		name := entry.Name()
+		withoutPrefix, ok := strings.CutPrefix(
+			name,
+			"segment-",
+		)
+		if !ok {
+			continue
+		}
+
+		id, err := strconv.ParseUint(withoutPrefix, 10, 64)
+		if err != nil {
+			return 0, fmt.Errorf(
+				"corrupted number of segment: %w",
+				err,
+			)
+		}
+
+		maxID = max(maxID, id)
+	}
+
+	return maxID, nil
+}
+
+func (s *Storage) recover() error {
+	iterator := s.Iterator()
+	defer func() {
+		_ = iterator.Close()
+	}()
+
+	for iterator.Next() {
+		id := iterator.RecordID()
+		pointer := iterator.Pointer()
+
+		expectID := domain.RecordID(len(s.records) + 1)
+		if id != expectID {
+			return fmt.Errorf(
+				"invalid record sequence: want %d, got %d",
+				expectID,
+				id,
+			)
+		}
+
+		s.records = append(s.records, pointer)
+		s.recordsCount = uint64(id)
+	}
+
+	if err := iterator.Err(); err != nil {
+		return fmt.Errorf(
+			"iterator: %w",
+			err,
+		)
+	}
+	return nil
 }
 
 func (s *Storage) Write(data []byte) (domain.RecordID, error) {
@@ -87,15 +177,26 @@ func (s *Storage) Write(data []byte) (domain.RecordID, error) {
 		return 0, ErrClosedStorage
 	}
 
+	sizeData := FileSize(len(data))
+	if sizeData+RecordHeaderSize >= MaxSegmentSize {
+		return 0, ErrRecordTooLarge
+	}
+
 	if s.writeSegment.isOverloaded(FileSize(len(data))) {
 		if err := s.rotationSegment(); err != nil {
-			return 0, fmt.Errorf("write segment: %w", err)
+			return 0, fmt.Errorf(
+				"write segment: %w",
+				err,
+			)
 		}
 	}
 
 	pointer, err := s.writeSegment.write(data, s.recordsCount+1)
 	if err != nil {
-		return 0, fmt.Errorf("write segment: %w", err)
+		return 0, fmt.Errorf(
+			"write segment: %w",
+			err,
+		)
 	}
 
 	s.recordsCount++
@@ -105,7 +206,7 @@ func (s *Storage) Write(data []byte) (domain.RecordID, error) {
 }
 
 func (s *Storage) ReadByID(id domain.RecordID) ([]byte, error) {
-	if 0 > id ||
+	if 0 >= id ||
 		id > domain.RecordID(len(s.records)) {
 		return nil, ErrRecordNotFound
 	}
@@ -144,7 +245,10 @@ func (s *Storage) Close() error {
 
 	if s.readSegment.isOpen() {
 		if err := s.readSegment.close(); err != nil {
-			return fmt.Errorf("close read segment: %w", err)
+			return fmt.Errorf(
+				"close read segment: %w",
+				err,
+			)
 		}
 	}
 
@@ -153,7 +257,10 @@ func (s *Storage) Close() error {
 
 	if s.writeSegment.isOpen() {
 		if err := s.writeSegment.close(); err != nil {
-			return fmt.Errorf("close write segment: %w", err)
+			return fmt.Errorf(
+				"close write segment: %w",
+				err,
+			)
 		}
 	}
 
@@ -170,16 +277,23 @@ func (s *Storage) openPointer(pointer domain.RecordPointer) error {
 		}
 
 		if err := s.readSegment.close(); err != nil {
-			return fmt.Errorf("open pointer: %w", err)
+			return fmt.Errorf(
+				"open pointer: %w",
+				err,
+			)
 		}
 	}
 
 	newReader, err := newSegment(
 		s.dir,
 		pointer.SegmentID,
+		readFlag,
 	)
 	if err != nil {
-		return fmt.Errorf("open pointer: %w", err)
+		return fmt.Errorf(
+			"open pointer: %w",
+			err,
+		)
 	}
 
 	s.readSegment = newReader
@@ -187,17 +301,25 @@ func (s *Storage) openPointer(pointer domain.RecordPointer) error {
 }
 
 func (s *Storage) rotationSegment() error {
+	nextID := s.writeSegment.ID + 1
 	if err := s.writeSegment.close(); err != nil {
-		return fmt.Errorf("rotation segment: %w", err)
+		return fmt.Errorf(
+			"rotation segment: %w",
+			err,
+		)
 	}
 
 	newWriter, err := newSegment(
 		s.dir,
-		uint64(len(s.records)),
+		nextID,
+		writeFlag,
 	)
 	// TODO если тут будет ошибка, то у нас останется только закрытый сегмент для записи
 	if err != nil {
-		return fmt.Errorf("rotation segment: %w", err)
+		return fmt.Errorf(
+			"rotation segment: %w",
+			err,
+		)
 	}
 
 	s.writeSegment = newWriter
@@ -206,6 +328,6 @@ func (s *Storage) rotationSegment() error {
 
 func (s *Storage) Iterator() *Iterator {
 	return &Iterator{
-		storage: s,
+		dir: s.dir,
 	}
 }

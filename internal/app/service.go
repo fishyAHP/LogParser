@@ -110,7 +110,7 @@ func (s *Service) rebuildIndexes() error {
 		}
 
 		if err := s.index.Index(
-			iter.Record(),
+			iter.RecordID(),
 			entry,
 		); err != nil {
 			return fmt.Errorf(

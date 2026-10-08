@@ -52,7 +52,11 @@ var Magic = []byte{'L', 'G', 'P', 'R', 'S', 'R'}
 // newSegment создает/открывает файл, дает ему номер/название,
 // если его не было.
 // Также определяет его текущий размер.
-func newSegment(dir string, id uint64) (*segment, error) {
+func newSegment(
+	dir string,
+	id uint64,
+	flag int,
+) (*segment, error) {
 	// filepath.Join конкатенирует несколько строк в файловый путь.
 	// После того как сделаем интеграцию парсера и хранилища уберем эту обработку туда
 	path := filepath.Join(
@@ -65,7 +69,7 @@ func newSegment(dir string, id uint64) (*segment, error) {
 	// что указатель записи в файл ставить в его конец.
 	file, err := os.OpenFile(
 		path,
-		os.O_CREATE|os.O_RDWR|os.O_APPEND,
+		flag,
 		0o644,
 	)
 	if err != nil {
@@ -149,7 +153,7 @@ func validateFileHeader(file *os.File) error {
 }
 
 func (s *segment) isOverloaded(size FileSize) bool {
-	return float64(s.size+size)/float64(MaxSegmentSize) >= loadFactor
+	return float64(s.size+size+RecordHeaderSize/MaxSegmentSize) >= loadFactor
 }
 
 func (s *segment) write(data []byte, recordID uint64) (domain.RecordPointer, error) {
@@ -183,21 +187,11 @@ func (s *segment) write(data []byte, recordID uint64) (domain.RecordPointer, err
 
 func (s *segment) read(pointer domain.RecordPointer) ([]byte, error) {
 	if s.ID != pointer.SegmentID {
-		return nil, errors.New("not suitable record data")
-	}
-
-	if _, err := s.file.Seek(
-		int64(pointer.Offset),
-		io.SeekStart,
-	); err != nil {
-		return nil, fmt.Errorf(
-			"seek segment file: %w",
-			err,
-		)
+		return nil, errors.New("not suitable id data")
 	}
 
 	data := make([]byte, pointer.Length)
-	if _, err := io.ReadFull(s.file, data); err != nil {
+	if _, err := s.file.ReadAt(data, int64(pointer.Offset)); err != nil {
 		return nil, fmt.Errorf(
 			"read segment file: %w",
 			err,
