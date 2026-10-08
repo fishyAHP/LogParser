@@ -153,7 +153,7 @@ func validateFileHeader(file *os.File) error {
 }
 
 func (s *segment) isOverloaded(size FileSize) bool {
-	return float64(s.size+size+RecordHeaderSize/MaxSegmentSize) >= loadFactor
+	return float64(s.size+size+RecordHeaderSize)/float64(MaxSegmentSize) >= loadFactor
 }
 
 func (s *segment) write(data []byte, recordID uint64) (domain.RecordPointer, error) {

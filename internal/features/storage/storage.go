@@ -29,7 +29,7 @@ type Storage struct {
 
 var (
 	readFlag  = os.O_RDONLY
-	writeFlag = os.O_CREATE | os.O_WRONLY | os.O_APPEND
+	writeFlag = os.O_CREATE | os.O_RDWR | os.O_APPEND
 )
 
 var (
@@ -108,12 +108,10 @@ func findLastSegment(dir string) (uint64, error) {
 		)
 	}
 
-	maxID := uint64(1)
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
+	segmentsID := make(map[uint64]struct{})
+	var maxID uint64
 
+	for _, entry := range entries {
 		name := entry.Name()
 		withoutPrefix, ok := strings.CutPrefix(
 			name,
@@ -121,6 +119,14 @@ func findLastSegment(dir string) (uint64, error) {
 		)
 		if !ok {
 			continue
+		}
+
+		if !entry.Type().IsRegular() {
+			return 0, fmt.Errorf(
+				"segment %q isn't regular file: %v",
+				name,
+				entry.Type(),
+			)
 		}
 
 		id, err := strconv.ParseUint(withoutPrefix, 10, 64)
@@ -131,7 +137,42 @@ func findLastSegment(dir string) (uint64, error) {
 			)
 		}
 
+		if id == 0 {
+			return 0, errors.New(
+				"segment id cannot be zero",
+			)
+		}
+
+		expectedName := fmt.Sprintf("segment-%04d", id)
+
+		if entry.Name() != expectedName {
+			return 0, fmt.Errorf(
+				"invalid segment filename: %s, expected %s",
+				entry.Name(),
+				expectedName,
+			)
+		}
+
+		if _, ok = segmentsID[id]; ok {
+			return 0, errors.New(
+				"segment id must be unique",
+			)
+		}
+		segmentsID[id] = struct{}{}
 		maxID = max(maxID, id)
+	}
+
+	if maxID == 0 {
+		return 1, nil
+	}
+
+	for id := range maxID {
+		if _, ok := segmentsID[id+1]; !ok {
+			return 0, fmt.Errorf(
+				"missing segment-%04d",
+				id+1,
+			)
+		}
 	}
 
 	return maxID, nil

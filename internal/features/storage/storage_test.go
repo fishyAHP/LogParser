@@ -2,7 +2,11 @@ package storage
 
 import (
 	"bytes"
+	"encoding/binary"
+	"fmt"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -47,119 +51,6 @@ func TestStorage_New(t *testing.T) {
 			)
 		}
 	})
-}
-
-func TestStorage_Write(t *testing.T) {
-	dir := testStorageDir(t)
-
-	s, err := New(dir)
-	if err != nil {
-		t.Fatalf("new storage: %v", err)
-	}
-	defer s.Close()
-
-	data := []byte("hello world")
-
-	rd, err := s.Write(data)
-	if err != nil {
-		t.Fatalf("write: %v", err)
-	}
-
-	t.Run("storage write", func(t *testing.T) {
-		if rd == nil {
-			t.Fatal("id data is nil")
-		}
-
-		if rd.Pointer.Length != uint32(len(data)) {
-			t.Errorf(
-				"expected length %d, got %d",
-				len(data),
-				rd.Pointer.Length,
-			)
-		}
-
-		if rd.Pointer.SegmentID != s.writeSegment.ID {
-			t.Errorf(
-				"id belongs to segment %d, writer is %d",
-				rd.Pointer.SegmentID,
-				s.writeSegment.ID,
-			)
-		}
-	})
-}
-
-func TestStorage_WriteRead(t *testing.T) {
-	dir := testStorageDir(t)
-
-	s, err := New(dir)
-	if err != nil {
-		t.Fatalf("new storage: %v", err)
-	}
-	defer s.Close()
-
-	expected := []byte("hello from storage")
-
-	rd, err := s.Write(expected)
-	if err != nil {
-		t.Fatalf("write: %v", err)
-	}
-
-	actual, err := s.Read(rd)
-	if err != nil {
-		t.Fatalf("read: %v", err)
-	}
-
-	if !bytes.Equal(actual, expected) {
-		t.Errorf(
-			"expected %q, got %q",
-			expected,
-			actual,
-		)
-	}
-}
-
-func TestStorage_WriteReadMultiple(t *testing.T) {
-	dir := testStorageDir(t)
-
-	s, err := New(dir)
-	if err != nil {
-		t.Fatalf("new storage: %v", err)
-	}
-	defer s.Close()
-
-	data := [][]byte{
-		[]byte("first log"),
-		[]byte("second log"),
-		[]byte("third log"),
-		[]byte("fourth log"),
-	}
-
-	records := make([]*domain.RecordData, 0, len(data))
-
-	for _, d := range data {
-		rd, err := s.Write(d)
-		if err != nil {
-			t.Fatalf("write: %v", err)
-		}
-
-		records = append(records, rd)
-	}
-
-	for i, rd := range records {
-		actual, err := s.Read(rd)
-		if err != nil {
-			t.Fatalf("read %d: %v", i, err)
-		}
-
-		if !bytes.Equal(actual, data[i]) {
-			t.Errorf(
-				"id %d: expected %q, got %q",
-				i,
-				data[i],
-				actual,
-			)
-		}
-	}
 }
 
 func TestStorage_RotationSegment(t *testing.T) {
@@ -235,42 +126,300 @@ func TestStorage_Close(t *testing.T) {
 	}
 }
 
-func TestStorage_ReadOldRecordAfterRotation(t *testing.T) {
-	dir := testStorageDir(t)
+func TestStorageRecovery(t *testing.T) {
+	dir := t.TempDir()
 
-	s, err := New(dir)
+	storage, err := New(dir)
 	if err != nil {
-		t.Fatalf("new storage: %v", err)
+		t.Fatalf("create storage: %v", err)
 	}
-	defer s.Close()
 
-	expected := []byte("old log")
+	const initialRecords = 1000
+	const additionalRecords = 100
 
-	rd, err := s.Write(expected)
+	expected := make([][]byte, 0, initialRecords+additionalRecords)
+
+	for i := 0; i < initialRecords; i++ {
+		data := []byte(fmt.Sprintf("record-%d", i+1))
+
+		id, err := storage.Write(data)
+		if err != nil {
+			t.Fatalf("write record %d: %v", i+1, err)
+		}
+
+		if id != domain.RecordID(i+1) {
+			t.Fatalf("expected ID %d, got %d", i+1, id)
+		}
+
+		expected = append(expected, data)
+	}
+
+	if err := storage.Close(); err != nil {
+		t.Fatalf("close storage: %v", err)
+	}
+
+	storage, err = New(dir)
 	if err != nil {
-		t.Fatalf("write: %v", err)
+		t.Fatalf("reopen storage: %v", err)
 	}
 
-	oldSegmentID := rd.Pointer.SegmentID
+	for i, want := range expected {
+		got, err := storage.ReadByID(domain.RecordID(i + 1))
+		if err != nil {
+			t.Fatalf("read record %d: %v", i+1, err)
+		}
 
-	if err := s.rotationSegment(); err != nil {
-		t.Fatalf("rotation: %v", err)
+		if !bytes.Equal(got, want) {
+			t.Fatalf(
+				"record %d: expected %q, got %q",
+				i+1,
+				want,
+				got,
+			)
+		}
 	}
 
-	if s.writeSegment.ID == oldSegmentID {
-		t.Fatal("rotation did not create new segment")
+	for i := 0; i < additionalRecords; i++ {
+		id := initialRecords + i + 1
+		data := []byte(fmt.Sprintf("record-%d", id))
+
+		gotID, err := storage.Write(data)
+		if err != nil {
+			t.Fatalf("write record %d: %v", id, err)
+		}
+
+		if gotID != domain.RecordID(id) {
+			t.Fatalf("expected ID %d, got %d", id, gotID)
+		}
+
+		expected = append(expected, data)
 	}
 
-	actual, err := s.Read(rd)
+	if err := storage.Close(); err != nil {
+		t.Fatalf("close storage: %v", err)
+	}
+
+	storage, err = New(dir)
 	if err != nil {
-		t.Fatalf("read old id: %v", err)
+		t.Fatalf("second reopen: %v", err)
+	}
+	defer storage.Close()
+
+	for i, want := range expected {
+		got, err := storage.ReadByID(domain.RecordID(i + 1))
+		if err != nil {
+			t.Fatalf("read record %d: %v", i+1, err)
+		}
+
+		if !bytes.Equal(got, want) {
+			t.Fatalf(
+				"record %d: expected %q, got %q",
+				i+1,
+				want,
+				got,
+			)
+		}
+	}
+}
+
+func TestStorageCorruptedMagic(t *testing.T) {
+	dir := t.TempDir()
+
+	storage, err := New(dir)
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	if !bytes.Equal(actual, expected) {
-		t.Errorf(
-			"expected %q, got %q",
-			expected,
-			actual,
-		)
+	if _, err := storage.Write([]byte("hello")); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := storage.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	path := filepath.Join(dir, "segment-0001")
+
+	file, err := os.OpenFile(path, os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := file.WriteAt([]byte("BROKEN"), 0); err != nil {
+		file.Close()
+		t.Fatal(err)
+	}
+
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	recovered, err := New(dir)
+	if err == nil {
+		recovered.Close()
+		t.Fatal("expected recovery error for corrupted magic")
+	}
+}
+
+func TestStorageCorruptedRecordID(t *testing.T) {
+	dir := t.TempDir()
+
+	storage, err := New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := storage.Write([]byte("hello")); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := storage.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	path := filepath.Join(dir, "segment-0001")
+
+	file, err := os.OpenFile(path, os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var buf [8]byte
+	binary.BigEndian.PutUint64(buf[:], 100)
+
+	offset := int64(len(Magic) + 4)
+
+	if _, err := file.WriteAt(buf[:], offset); err != nil {
+		file.Close()
+		t.Fatal(err)
+	}
+
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	recovered, err := New(dir)
+	if err == nil {
+		recovered.Close()
+		t.Fatal("expected error for invalid RecordID sequence")
+	}
+}
+
+func TestStorageTruncatedRecord(t *testing.T) {
+	dir := t.TempDir()
+
+	storage, err := New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := storage.Write([]byte("hello world")); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := storage.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	path := filepath.Join(dir, "segment-0001")
+
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := os.Truncate(path, info.Size()-3); err != nil {
+		t.Fatal(err)
+	}
+
+	recovered, err := New(dir)
+	if err == nil {
+		recovered.Close()
+		t.Fatal("expected recovery error for truncated record")
+	}
+}
+
+func TestStorageMissingSegment(t *testing.T) {
+	dir := t.TempDir()
+
+	for _, id := range []uint64{1, 3} {
+		seg, err := newSegment(dir, id, writeFlag)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if err := seg.close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	storage, err := New(dir)
+	if err == nil {
+		storage.Close()
+		t.Fatal("expected error for missing segment-0002")
+	}
+}
+
+func TestStorageRotationRecovery(t *testing.T) {
+	if testing.Short() {
+		t.Skip("large integration test")
+	}
+
+	dir := t.TempDir()
+
+	storage, err := New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	const count = 200
+	data := bytes.Repeat([]byte("A"), 1024*1024)
+
+	for i := 0; i < count; i++ {
+		id, err := storage.Write(data)
+		if err != nil {
+			t.Fatalf("write %d: %v", i+1, err)
+		}
+
+		if id != domain.RecordID(i+1) {
+			t.Fatalf("expected ID %d, got %d", i+1, id)
+		}
+	}
+
+	if err := storage.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	segmentCount := 0
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), "segment-") {
+			segmentCount++
+		}
+	}
+
+	if segmentCount < 2 {
+		t.Fatalf("expected multiple segments, got %d", segmentCount)
+	}
+
+	storage, err = New(dir)
+	if err != nil {
+		t.Fatalf("reopen storage: %v", err)
+	}
+	defer storage.Close()
+
+	for i := 1; i <= count; i++ {
+		got, err := storage.ReadByID(domain.RecordID(i))
+		if err != nil {
+			t.Fatalf("read record %d: %v", i, err)
+		}
+
+		if !bytes.Equal(got, data) {
+			t.Fatalf("record %d corrupted", i)
+		}
 	}
 }
