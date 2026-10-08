@@ -8,8 +8,9 @@ import (
 )
 
 var (
-	ErrInvalidType    = errors.New("invalid value type")
-	ErrRecordNotFound = errors.New("record not found")
+	ErrInvalidType     = errors.New("invalid value type")
+	ErrRecordNotFound  = errors.New("record not found")
+	ErrUnsupportedType = errors.New("unsupported type")
 )
 
 type Key interface {

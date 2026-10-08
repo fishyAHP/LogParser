@@ -1,6 +1,7 @@
 package ranged
 
 import (
+	"fmt"
 	"slices"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
@@ -163,9 +164,31 @@ func (i *Index[K]) Max(
 func (i *Index[K]) Avg(
 	posting *structs.PostingList,
 ) (domain.Value, error) {
+	sum, count, err := i.sumAndCount(posting)
+	if err != nil {
+		return nil, err
+	}
+
+	return sum / domain.FloatValue(count), nil
+}
+
+func (i *Index[K]) Sum(
+	posting *structs.PostingList,
+) (domain.Value, error) {
+	sum, _, err := i.sumAndCount(posting)
+	if err != nil {
+		return nil, err
+	}
+	return sum, nil
+}
+
+func (i *Index[K]) sumAndCount(
+	posting *structs.PostingList,
+) (domain.FloatValue, int, error) {
 	var (
 		count int
 		sum   domain.FloatValue
+		err   error
 	)
 
 	i.tree.forEach(posting, func(
@@ -180,14 +203,24 @@ func (i *Index[K]) Avg(
 		case domain.IntValue:
 			count += length
 			sum += domain.FloatValue(length) * domain.FloatValue(v)
+		default:
+			err = fmt.Errorf(
+				"aggregate value %T: %w",
+				v,
+				common.ErrUnsupportedType,
+			)
+			return false
 		}
 
 		return count < posting.Len()
 	})
 
-	if count == 0 {
-		return nil, common.ErrRecordNotFound
+	if err != nil {
+		return 0, 0, err
 	}
 
-	return sum / domain.FloatValue(count), nil
+	if count == 0 {
+		return 0, 0, common.ErrRecordNotFound
+	}
+	return sum, count, nil
 }
