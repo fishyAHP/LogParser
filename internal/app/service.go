@@ -173,12 +173,18 @@ func (s *Service) IngestReader(reader io.Reader) error {
 		}
 
 		if err := s.Ingest(raw); err != nil {
-			return fmt.Errorf("ingest record: %w", err)
+			return fmt.Errorf(
+				"ingest record: %w",
+				err,
+			)
 		}
 	}
 
 	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("scanner error: %w", err)
+		return fmt.Errorf(
+			"scanner error: %w",
+			err,
+		)
 	}
 	return nil
 }
@@ -186,14 +192,27 @@ func (s *Service) IngestReader(reader io.Reader) error {
 func (s *Service) Query(q string) ([][]byte, error) {
 	result, err := s.executor.Execute(q)
 	if err != nil {
-		return nil, fmt.Errorf("executing raw: %w", err)
+		return nil, fmt.Errorf(
+			"executing raw: %w",
+			err,
+		)
+	}
+
+	limit := s.store.RecordsCount()
+	if result.Limit != nil {
+		limit = *result.Limit
+	}
+
+	if limit == 0 {
+		return nil, nil
 	}
 
 	if result.FullScan {
 		iterator := s.store.Iterator()
 		res := make([][]byte, 0)
 
-		for iterator.Next() {
+		for limit > 0 &&
+			iterator.Next() {
 			data, err := s.project(iterator.Data(), result.Fields)
 			if err != nil {
 				return nil, fmt.Errorf(
@@ -207,6 +226,7 @@ func (s *Service) Query(q string) ([][]byte, error) {
 				data = bytes.Clone(data)
 			}
 
+			limit--
 			res = append(res, data)
 		}
 
@@ -221,8 +241,12 @@ func (s *Service) Query(q string) ([][]byte, error) {
 	}
 
 	sl := result.Posting.Slice()
-	res := make([][]byte, 0, len(sl))
+	res := make([][]byte, 0, limit)
 	for _, record := range sl {
+		if limit == 0 {
+			break
+		}
+
 		data, err := s.store.ReadByID(record)
 		if err != nil {
 			if errors.Is(err, storage.ErrRecordNotFound) {
@@ -242,6 +266,8 @@ func (s *Service) Query(q string) ([][]byte, error) {
 				err,
 			)
 		}
+
+		limit--
 		res = append(res, data)
 	}
 

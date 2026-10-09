@@ -19,6 +19,7 @@ func NewLexer() *Lexer {
 			"or":     OrType,
 			"select": SelectType,
 			"where":  WhereType,
+			"limit":  LimitType,
 		},
 		operators: map[string]LexemeType{
 			"=":  EqualType,
@@ -64,6 +65,7 @@ const (
 	WhereType
 	CommaType
 	AsteriskType
+	LimitType
 
 	// EOF - end of file or string
 	EOF
@@ -109,6 +111,8 @@ func (t LexemeType) String() string {
 		return "*"
 	case CommaType:
 		return ","
+	case LimitType:
+		return "LIMIT"
 	case EOF:
 		return "EOF"
 	default:

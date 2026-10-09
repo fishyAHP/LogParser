@@ -41,6 +41,7 @@ func (t *TypedBinaryExpr) isTypedExpr() {}
 type TypedQuery struct {
 	Fields     []string
 	Expression TypedExpr
+	Limit      *uint64
 }
 
 func allowedOperators(typ domain.IndexType) CompareOperator {
@@ -89,6 +90,7 @@ func (s *SemanticAnalyzer) Analyze(
 	return TypedQuery{
 		Fields:     fields,
 		Expression: typed,
+		Limit:      query.Limit,
 	}, nil
 }
 

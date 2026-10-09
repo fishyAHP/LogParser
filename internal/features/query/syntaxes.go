@@ -3,10 +3,11 @@ package query
 import (
 	"errors"
 	"fmt"
+	"strconv"
 )
 
 // Grammar:
-// query  	  = SELECT fields [WHERE expression] | expression
+// query  	  = SELECT fields [WHERE expression] [LIMIT number] | expression [LIMIT number]
 // fields 	  = "*" | identifier {"," identifier}
 // expression = orExpr
 
@@ -83,9 +84,21 @@ func (s *Syntaxes) expect(t LexemeType) (Lexeme, error) {
 //
 //  5. Fields == ["*"], Where == nil:
 //     SELECT all records
+//
+// Limit has 3 states:
+//
+//  1. Limit == nil:
+//     Expect all records
+//
+//  2. Limit == 0:
+//     Expect 0 records
+//
+//  3. Limit > 0:
+//     Expect Limit records
 type Query struct {
 	Fields []string
 	Where  Expr
+	Limit  *uint64
 }
 
 func (s *Syntaxes) Query(
@@ -138,6 +151,15 @@ func (s *Syntaxes) Query(
 
 		query.Where = expr
 	}
+
+	limit, err := s.parseLimit()
+	if err != nil {
+		return Query{}, fmt.Errorf(
+			"parse limit: %w",
+			err,
+		)
+	}
+	query.Limit = limit
 
 	if _, err = s.expect(EOF); err != nil {
 		return Query{}, err
@@ -293,6 +315,33 @@ func (s *Syntaxes) parseComparison() (Expr, error) {
 		Operator: conditionOp,
 		Value:    value,
 	}, nil
+}
+
+func (s *Syntaxes) parseLimit() (*uint64, error) {
+	if s.match(LimitType) {
+		lexeme := s.current()
+		if !s.match(Number) {
+			return nil, fmt.Errorf(
+				"%w: want %s, got %s",
+				ErrUnexpectedLexeme,
+				Number,
+				lexeme.Type,
+			)
+		}
+
+		parsed, err := strconv.ParseUint(
+			lexeme.Literal,
+			10, 64,
+		)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"parse uint: %w",
+				err,
+			)
+		}
+		return &parsed, nil
+	}
+	return nil, nil
 }
 
 func Map(t LexemeType) (CompareOperator, bool) {

@@ -38,6 +38,7 @@ type Result struct {
 	Fields   []string
 	Posting  *structs.PostingList
 	FullScan bool
+	Limit    *uint64
 }
 
 func (e *Executor) Execute(
@@ -69,6 +70,7 @@ func (e *Executor) Execute(
 		return Result{
 			Fields:   typed.Fields,
 			FullScan: true,
+			Limit:    typed.Limit,
 		}, nil
 	}
 
@@ -82,6 +84,7 @@ func (e *Executor) Execute(
 	return Result{
 		Posting: res,
 		Fields:  typed.Fields,
+		Limit:   typed.Limit,
 	}, nil
 }
 
