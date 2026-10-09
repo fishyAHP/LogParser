@@ -23,7 +23,9 @@ func New() *Index {
 	}
 }
 
-func (i *Index) Search(value domain.Value) (*structs.PostingList, error) {
+func (i *Index) Search(
+	value domain.Value,
+) (*structs.PostingList, error) {
 	strVal, ok := value.(domain.StringValue)
 	if !ok {
 		return nil, common.ErrInvalidType
@@ -36,18 +38,20 @@ func (i *Index) Search(value domain.Value) (*structs.PostingList, error) {
 	return res, nil
 }
 
-func (i *Index) Add(value domain.Value, record domain.RecordID) error {
+func (i *Index) Add(
+	value domain.Value,
+	record domain.RecordID,
+) error {
 	strVal, ok := value.(domain.StringValue)
 	if !ok {
 		return common.ErrInvalidType
 	}
 
 	tokens := i.Tokenizer.Tokenize(string(strVal))
-	sett := structs.NewSet[words.Token](len(tokens))
-	sett.AddMany(tokens...)
-	tokens = sett.Slice()
+	set := structs.NewSet[words.Token](len(tokens))
+	set.AddMany(tokens...)
 
-	for _, token := range tokens {
+	set.ForEach(func(token words.Token) bool {
 		if _, ok := i.invert[token]; !ok {
 			i.invert[token] = structs.NewPostingLists(1)
 		}
@@ -55,12 +59,16 @@ func (i *Index) Add(value domain.Value, record domain.RecordID) error {
 		if i.invert[token].Add(record) {
 			i.count++
 		}
-	}
+
+		return false
+	})
 
 	return nil
 }
 
-func (i *Index) get(s string) *structs.PostingList {
+func (i *Index) get(
+	s string,
+) *structs.PostingList {
 	tokens := i.Tokenizer.Tokenize(s)
 	lists := make([]*structs.PostingList, 0, len(tokens))
 
@@ -101,7 +109,8 @@ func (i *Index) get(s string) *structs.PostingList {
 
 func (i *Index) Remove(
 	s domain.Value,
-	data domain.RecordID) error {
+	data domain.RecordID,
+) error {
 	keys, ok := s.(domain.StringValue)
 	if !ok {
 		return common.ErrInvalidType

@@ -26,7 +26,14 @@ type ProjectedField struct {
 type Projections []ProjectedField
 
 func (p Projections) MarshalJSON() ([]byte, error) {
+	capacity := 2
+
+	for _, field := range p {
+		capacity += len(field.Name) + len(field.Value)
+	}
+
 	var buffer bytes.Buffer
+	buffer.Grow(capacity)
 
 	buffer.WriteByte('{')
 

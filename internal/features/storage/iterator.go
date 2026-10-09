@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
 )
@@ -18,6 +19,7 @@ type Iterator struct {
 	offset    uint64
 	file      *os.File
 
+	header  [RecordHeaderSize]byte
 	data    []byte
 	id      domain.RecordID
 	pointer domain.RecordPointer
@@ -52,9 +54,8 @@ func (i *Iterator) Next() bool {
 		curOffset = uint64(len(Magic))
 	}
 
-	buf := make([]byte, RecordHeaderSize)
 	for {
-		if n, err := i.file.ReadAt(buf, int64(curOffset)); err != nil {
+		if n, err := i.file.ReadAt(i.header[:], int64(curOffset)); err != nil {
 			if errors.Is(err, io.EOF) && n == 0 {
 				err = i.file.Close()
 				i.file = nil
@@ -84,19 +85,22 @@ func (i *Iterator) Next() bool {
 		break
 	}
 
-	length := binary.BigEndian.Uint32(buf[0:4])
+	length := binary.BigEndian.Uint32(i.header[0:4])
 	if FileSize(length)+RecordHeaderSize >= MaxSegmentSize {
 		i.err = ErrRecordTooLarge
 		return false
 	}
 
-	recordID := binary.BigEndian.Uint64(buf[4:])
+	recordID := binary.BigEndian.Uint64(i.header[4:])
 
-	buf = make([]byte, length)
+	if cap(i.data) < int(length) {
+		i.data = slices.Grow(i.data, int(length)-len(i.data))
+	}
+	i.data = i.data[:int(length)]
 
 	curOffset += uint64(RecordHeaderSize)
 	if _, err = i.file.ReadAt(
-		buf,
+		i.data,
 		int64(curOffset),
 	); err != nil {
 		i.err = err
@@ -106,7 +110,6 @@ func (i *Iterator) Next() bool {
 	i.segmentID = curID
 	i.offset = curOffset + uint64(length)
 
-	i.data = buf
 	i.id = domain.RecordID(recordID)
 	i.pointer = domain.RecordPointer{
 		Offset:    curOffset,

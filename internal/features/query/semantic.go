@@ -80,8 +80,14 @@ func (s *SemanticAnalyzer) Analyze(
 		)
 	}
 
+	fields := query.Fields
+
+	if len(fields) == 0 {
+		fields = []string{"*"}
+	}
+
 	return TypedQuery{
-		Fields:     query.Fields,
+		Fields:     fields,
 		Expression: typed,
 	}, nil
 }

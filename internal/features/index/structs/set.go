@@ -66,3 +66,11 @@ func (s *Set[K]) Clone() *Set[K] {
 
 	return newSet
 }
+
+func (s *Set[K]) ForEach(visit func(K) bool) {
+	for k := range s.set {
+		if visit(k) {
+			return
+		}
+	}
+}

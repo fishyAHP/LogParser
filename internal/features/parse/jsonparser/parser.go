@@ -1,8 +1,10 @@
 package jsonparser
 
 import (
+	"bytes"
 	"encoding/json/jsontext"
 	jsonv2 "encoding/json/v2"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -13,25 +15,26 @@ import (
 
 type JSONParser struct {
 	scheme *domain.Scheme
+	values map[string]jsontext.Value
 }
 
 func New(scheme *domain.Scheme) *JSONParser {
 	return &JSONParser{
 		scheme: scheme,
+		values: make(map[string]jsontext.Value, 5),
 	}
 }
 
 func (jp *JSONParser) Parse(data []byte) (domain.ParsedLog, error) {
-	var values map[string]jsontext.Value
-	if err := jsonv2.Unmarshal(data, &values); err != nil {
+	if err := jsonv2.Unmarshal(data, &jp.values); err != nil {
 		return domain.ParsedLog{}, fmt.Errorf(
 			"unmarshal json: %w",
 			err,
 		)
 	}
 
-	fields := make([]string, 0, len(values))
-	for name := range values {
+	fields := make([]string, 0, len(jp.values))
+	for name := range jp.values {
 		fields = append(fields, name)
 	}
 
@@ -39,7 +42,7 @@ func (jp *JSONParser) Parse(data []byte) (domain.ParsedLog, error) {
 		Values: make([]domain.Value, 0, len(jp.scheme.Parameters)),
 	}
 	for _, field := range jp.scheme.Parameters {
-		strVal, ok := values[field.Name]
+		strVal, ok := jp.values[field.Name]
 		if !ok {
 			return domain.ParsedLog{}, fmt.Errorf(
 				"field %q not found",
@@ -59,6 +62,7 @@ func (jp *JSONParser) Parse(data []byte) (domain.ParsedLog, error) {
 		entry.Values = append(entry.Values, val)
 	}
 
+	clear(jp.values)
 	return domain.ParsedLog{
 		Entry:  entry,
 		Fields: fields,
@@ -130,25 +134,62 @@ func (jp *JSONParser) Project(
 	data []byte,
 	fields []string,
 ) (common.Projections, error) {
-	var values map[string]jsontext.Value
-	if err := jsonv2.Unmarshal(data, &values); err != nil {
+	decoder := jsontext.NewDecoder(bytes.NewReader(data))
+
+	token, err := decoder.ReadToken()
+	if err != nil {
 		return nil, fmt.Errorf(
-			"unmarshal json: %w",
+			"start read json: %w",
 			err,
 		)
 	}
 
-	res := make(common.Projections, 0, len(fields))
-	for _, field := range fields {
-		value, ok := values[field]
-		if !ok {
-			value = jsontext.Value("null")
+	if token.Kind() != '{' {
+		return nil, errors.New(
+			"expect json object",
+		)
+	}
+
+	res := make(common.Projections, len(fields))
+
+	for i, field := range fields {
+		res[i] = common.ProjectedField{
+			Name:  field,
+			Value: jsontext.Value("null"),
+		}
+	}
+
+	for decoder.PeekKind() != '}' {
+		token, err := decoder.ReadToken()
+		if err != nil {
+			return nil, fmt.Errorf(
+				"read field name: %w",
+				err,
+			)
+		}
+		name := token.String()
+
+		value, err := decoder.ReadValue()
+		if err != nil {
+			return nil, fmt.Errorf(
+				"read field value: %w",
+				err,
+			)
 		}
 
-		res = append(res, common.ProjectedField{
-			Name:  field,
-			Value: value,
-		})
+		for i := range res {
+			if res[i].Name == name {
+				res[i].Value = value.Clone()
+				break
+			}
+		}
+	}
+
+	if _, err := decoder.ReadToken(); err != nil {
+		return nil, fmt.Errorf(
+			"read end object: %w",
+			err,
+		)
 	}
 
 	return res, nil

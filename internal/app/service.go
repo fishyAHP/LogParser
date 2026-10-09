@@ -202,7 +202,12 @@ func (s *Service) Query(q string) ([][]byte, error) {
 				)
 			}
 
-			res = append(res, bytes.Clone(data))
+			if len(result.Fields) == 0 ||
+				(len(result.Fields) == 1 && result.Fields[0] == "*") {
+				data = bytes.Clone(data)
+			}
+
+			res = append(res, data)
 		}
 
 		if err = iterator.Err(); err != nil {

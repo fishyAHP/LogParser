@@ -16,7 +16,10 @@ import (
 )
 
 func main() {
-	c := New(os.Stdin, os.Stdout, os.Stderr)
+	c, err := New(os.Stdin, os.Stdout, os.Stderr)
+	if err != nil {
+		log.Fatal(err)
+	}
 	defer func() {
 		err := c.service.Close()
 		if err != nil {
@@ -27,6 +30,7 @@ func main() {
 	if err := writeHeapProfile("heap.pprof"); err != nil {
 		log.Fatal(err)
 	}
+
 	if err := c.Run(); err != nil {
 		log.Fatal(err)
 	}
@@ -58,8 +62,8 @@ func New(
 	in io.Reader,
 	out io.Writer,
 	errOut io.Writer,
-) *Cli {
-	service, _ := app.NewService(&domain.Scheme{
+) (*Cli, error) {
+	service, err := app.NewService(&domain.Scheme{
 		Separator: ',',
 		Parameters: []domain.Field{
 			{
@@ -83,12 +87,16 @@ func New(
 		".storage/logs",
 	)
 
+	if err != nil {
+		return nil, err
+	}
+
 	return &Cli{
 		service: service,
 		in:      in,
 		out:     out,
 		errOut:  errOut,
-	}
+	}, nil
 }
 
 func (c *Cli) Run() error {
@@ -245,7 +253,6 @@ func (c *Cli) query(query string) error {
 	for i, logg := range logs {
 		fmt.Fprintf(c.out, "%d) %s\n", i+1, string(logg))
 	}
-
 	fmt.Fprintf(c.out, "%d results\n", len(logs))
 	return nil
 }
