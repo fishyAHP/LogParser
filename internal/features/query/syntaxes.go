@@ -24,6 +24,7 @@ func NewSyntaxes(lexer *Lexer) *Syntaxes {
 
 var (
 	ErrUnexpectedLexeme = errors.New("unexpected lexeme type")
+	ErrEmptyQuery       = errors.New("empty query")
 )
 
 func (s *Syntaxes) current() Lexeme {
@@ -41,7 +42,7 @@ func (s *Syntaxes) check(t LexemeType) bool {
 }
 
 func (s *Syntaxes) match(t LexemeType) bool {
-	if s.check(t) {
+	if !s.check(t) {
 		return false
 	}
 
@@ -72,7 +73,7 @@ func (s *Syntaxes) expect(t LexemeType) (Lexeme, error) {
 //     Old filtering without SELECT
 //
 //  2. Fields == ["*"], Where != nil:
-//     All fields with filtering
+//     FullScan fields with filtering
 //
 //  3. Fields contain field names, Where != nil:
 //     Field projection with filtering
@@ -87,7 +88,9 @@ type Query struct {
 	Where  Expr
 }
 
-func (s *Syntaxes) Query(input string) (Query, error) {
+func (s *Syntaxes) Query(
+	input string,
+) (Query, error) {
 	lexemes, err := s.Lex.Parse(input)
 	if err != nil {
 		return Query{}, fmt.Errorf(
@@ -96,47 +99,38 @@ func (s *Syntaxes) Query(input string) (Query, error) {
 		)
 	}
 
-	if len(lexemes) == 0 {
-		return Query{}, errors.New(
-			"empty query",
-		)
+	if len(lexemes) == 0 ||
+		(len(lexemes) == 1 && lexemes[0].Type == EOF) {
+		return Query{}, ErrEmptyQuery
 	}
+
 	s.lexemes = lexemes
 	s.pos = 0
 
-	first := s.current()
-	query := Query{}
-
-	switch first.Type {
-	case SelectType:
-		s.advance()
-
+	var query Query
+	if s.match(SelectType) {
 		fields, err := s.parseFields()
 		if err != nil {
-			return Query{}, err
+			return Query{}, fmt.Errorf(
+				"parse SELECT fields: %w",
+				err,
+			)
 		}
+
 		query.Fields = fields
 
-		switch s.current().Type {
-		case WhereType:
-			s.advance()
-
+		if s.match(WhereType) {
 			expr, err := s.parseOr()
 			if err != nil {
-				return Query{}, err
+				return Query{}, fmt.Errorf(
+					"parse WHERE expression: %w",
+					err,
+				)
 			}
 
 			query.Where = expr
-		case EOF:
-			return query, nil
-		default:
-			return Query{}, fmt.Errorf(
-				"%w: %s",
-				ErrUnexpectedLexeme,
-				lexemes[s.pos].Type,
-			)
 		}
-	default:
+	} else {
 		expr, err := s.parseOr()
 		if err != nil {
 			return Query{}, err
@@ -145,14 +139,11 @@ func (s *Syntaxes) Query(input string) (Query, error) {
 		query.Where = expr
 	}
 
-	if !s.match(EOF) {
-		return Query{}, fmt.Errorf(
-			"%w %s",
-			ErrUnexpectedLexeme,
-			lexemes[s.pos].Type,
-		)
+	if _, err = s.expect(EOF); err != nil {
+		return Query{}, err
 	}
 
+	s.lexemes = nil
 	return query, nil
 }
 

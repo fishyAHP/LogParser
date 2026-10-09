@@ -1,7 +1,6 @@
 package query
 
 import (
-	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -39,6 +38,11 @@ type TypedCondition struct {
 func (t *TypedCondition) isTypedExpr()  {}
 func (t *TypedBinaryExpr) isTypedExpr() {}
 
+type TypedQuery struct {
+	Fields     []string
+	Expression TypedExpr
+}
+
 func allowedOperators(typ domain.IndexType) CompareOperator {
 	switch typ {
 	case domain.HashIndex, domain.TextIndex:
@@ -54,21 +58,85 @@ func isAllowed(allowed, op CompareOperator) bool {
 	return allowed&op != 0
 }
 
-func (s *SemanticAnalyzer) Analyze(expr Expr) (TypedExpr, error) {
+func (s *SemanticAnalyzer) Analyze(
+	query Query,
+	catalog *domain.FieldsCatalog,
+) (TypedQuery, error) {
+	if err := s.analyzeFields(
+		query.Fields,
+		catalog,
+	); err != nil {
+		return TypedQuery{}, fmt.Errorf(
+			"analyze fields: %w",
+			err,
+		)
+	}
+
+	typed, err := s.analyzeExpression(query.Where)
+	if err != nil {
+		return TypedQuery{}, fmt.Errorf(
+			"analyze expression: %w",
+			err,
+		)
+	}
+
+	return TypedQuery{
+		Fields:     query.Fields,
+		Expression: typed,
+	}, nil
+}
+
+func (s *SemanticAnalyzer) analyzeFields(
+	fields []string,
+	catalog *domain.FieldsCatalog,
+) error {
+	for _, field := range fields {
+		if field == "*" {
+			return nil
+		}
+
+		if slices.ContainsFunc(
+			s.scheme.Parameters,
+			func(f domain.Field) bool {
+				return f.Name == field
+			}) {
+			continue
+		}
+
+		if !catalog.Has(field) {
+			return fmt.Errorf(
+				"undefined field: %q",
+				field,
+			)
+		}
+	}
+
+	return nil
+}
+
+func (s *SemanticAnalyzer) analyzeExpression(
+	expr Expr,
+) (TypedExpr, error) {
 	if expr == nil {
-		return nil, errors.New("expression is nil")
+		return nil, nil
 	}
 
 	switch e := expr.(type) {
 	case *BinaryExpr:
-		left, err := s.Analyze(e.Left)
+		left, err := s.analyzeExpression(e.Left)
 		if err != nil {
-			return nil, fmt.Errorf("left analyze: %w", err)
+			return nil, fmt.Errorf(
+				"left analyze: %w",
+				err,
+			)
 		}
 
-		right, err := s.Analyze(e.Right)
+		right, err := s.analyzeExpression(e.Right)
 		if err != nil {
-			return nil, fmt.Errorf("right analyze: %w", err)
+			return nil, fmt.Errorf(
+				"right analyze: %w",
+				err,
+			)
 		}
 		return &TypedBinaryExpr{
 			Left:     left,
@@ -115,7 +183,10 @@ func (s *SemanticAnalyzer) Analyze(expr Expr) (TypedExpr, error) {
 	}
 	return nil, fmt.Errorf(
 		"invalid type of expression: want %T or %T, got %T",
-		BinaryExpr{}, Condition{}, expr)
+		BinaryExpr{},
+		Condition{},
+		expr,
+	)
 }
 
 func parseValue(field domain.DataType, lexeme Lexeme) (domain.Value, error) {
@@ -139,7 +210,10 @@ func parseValue(field domain.DataType, lexeme Lexeme) (domain.Value, error) {
 
 		val, err := strconv.ParseInt(lexeme.Literal, 10, 64)
 		if err != nil {
-			return nil, fmt.Errorf("semantic parse int: %w", err)
+			return nil, fmt.Errorf(
+				"semantic parse int: %w",
+				err,
+			)
 		}
 
 		return domain.IntValue(val), nil
@@ -152,20 +226,27 @@ func parseValue(field domain.DataType, lexeme Lexeme) (domain.Value, error) {
 		}
 		val, err := strconv.ParseFloat(lexeme.Literal, 64)
 		if err != nil {
-			return nil, fmt.Errorf("semantic parse float: %w", err)
+			return nil, fmt.Errorf(
+				"semantic parse float: %w",
+				err,
+			)
 		}
 
 		return domain.FloatValue(val), nil
 	case domain.BoolType:
 		if lexeme.Type != Bool {
-			return nil, fmt.Errorf("want bool type, got: %s",
+			return nil, fmt.Errorf(
+				"want bool type, got: %s",
 				lexeme.Type,
 			)
 		}
 
 		val, err := strconv.ParseBool(lexeme.Literal)
 		if err != nil {
-			return nil, fmt.Errorf("semantic parse bool: %w", err)
+			return nil, fmt.Errorf(
+				"semantic parse bool: %w",
+				err,
+			)
 		}
 
 		return domain.BoolValue(val), nil

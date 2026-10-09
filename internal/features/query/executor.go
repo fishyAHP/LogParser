@@ -4,20 +4,27 @@ import (
 	"errors"
 	"fmt"
 
+	"fishyAHP/LogParser.git/internal/core/domain"
 	"fishyAHP/LogParser.git/internal/features/index"
 	"fishyAHP/LogParser.git/internal/features/index/common"
 	"fishyAHP/LogParser.git/internal/features/index/structs"
 )
 
 type Executor struct {
-	indexes  *index.Manager
+	indexes *index.Manager
+	catalog *domain.FieldsCatalog
+
 	syntax   *Syntaxes
 	semantic *SemanticAnalyzer
 }
 
-func NewExecutor(indexes *index.Manager) *Executor {
+func NewExecutor(
+	indexes *index.Manager,
+	catalog *domain.FieldsCatalog,
+) *Executor {
 	return &Executor{
 		indexes: indexes,
+		catalog: catalog,
 		syntax: NewSyntaxes(
 			NewLexer(),
 		),
@@ -27,33 +34,55 @@ func NewExecutor(indexes *index.Manager) *Executor {
 	}
 }
 
+type Result struct {
+	Fields   []string
+	Posting  *structs.PostingList
+	FullScan bool
+}
+
 func (e *Executor) Execute(
 	s string,
-) (*structs.PostingList, error) {
-	expr, err := e.syntax.Query(s)
+) (Result, error) {
+	query, err := e.syntax.Query(s)
 	if err != nil {
-		return nil, fmt.Errorf(
+		return Result{}, fmt.Errorf(
 			"syntax query: %w",
 			err,
 		)
 	}
 
-	typedExpr, err := e.semantic.Analyze(expr)
+	typed, err := e.semantic.Analyze(query, e.catalog)
 	if err != nil {
-		return nil, fmt.Errorf(
+		return Result{}, fmt.Errorf(
 			"semantic analyze: %w",
 			err,
 		)
 	}
 
-	res, err := e.executeExpr(typedExpr)
+	if typed.Expression == nil {
+		if len(typed.Fields) == 0 {
+			return Result{}, errors.New(
+				"empty typed expression",
+			)
+		}
+
+		return Result{
+			Fields:   typed.Fields,
+			FullScan: true,
+		}, nil
+	}
+
+	res, err := e.executeExpr(typed.Expression)
 	if err != nil {
-		return nil, fmt.Errorf(
+		return Result{}, fmt.Errorf(
 			"execute expression: %w",
 			err,
 		)
 	}
-	return res, nil
+	return Result{
+		Posting: res,
+		Fields:  typed.Fields,
+	}, nil
 }
 
 func (e *Executor) executeExpr(

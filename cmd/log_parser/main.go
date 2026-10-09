@@ -123,16 +123,20 @@ func (c *Cli) execute(line string) (bool, error) {
 	switch strings.ToLower(command) {
 	case "ingest":
 		return false, c.ingest(argument)
+
 	case "ingest-file":
 		return false, c.ingestFile(argument)
+
 	case "ingest-tcp":
 		return false, c.ingestTCP(argument)
+
 	case "query":
 		return false, c.query(argument)
+
 	case "exit":
 		return true, nil
-	default:
 
+	default:
 		return false, fmt.Errorf(
 			"%w: %q",
 			ErrUnknownCommand,
@@ -143,20 +147,27 @@ func (c *Cli) execute(line string) (bool, error) {
 
 func (c *Cli) ingest(raw string) error {
 	if strings.TrimSpace(raw) == "" {
-		return fmt.Errorf("expect not empty argument")
+		return errors.New(
+			"expect not empty argument",
+		)
 	}
 
 	bytes := []byte(raw)
 	err := c.service.Ingest(bytes)
 	if err != nil {
-		return fmt.Errorf("ingest: %w", err)
+		return fmt.Errorf(
+			"ingest: %w",
+			err,
+		)
 	}
 	return nil
 }
 
 func (c *Cli) ingestFile(path string) error {
 	if strings.TrimSpace(path) == "" {
-		return errors.New("expected path file")
+		return errors.New(
+			"expected path file",
+		)
 	}
 
 	file, err := os.Open(path)
@@ -185,7 +196,9 @@ func (c *Cli) ingestFile(path string) error {
 
 func (c *Cli) ingestTCP(address string) error {
 	if strings.TrimSpace(address) == "" {
-		return errors.New("expected tcp address")
+		return errors.New(
+			"expected tcp address",
+		)
 	}
 
 	conn, err := net.Dial("tcp", address)
@@ -215,12 +228,18 @@ func (c *Cli) ingestTCP(address string) error {
 
 func (c *Cli) query(query string) error {
 	if strings.TrimSpace(query) == "" {
-		return fmt.Errorf("expect not empty argument")
+		return errors.New(
+			"expect not empty argument",
+		)
 	}
 
 	logs, err := c.service.Query(query)
 	if err != nil {
-		return fmt.Errorf("query %q: %w", query, err)
+		return fmt.Errorf(
+			"query %q: %w",
+			query,
+			err,
+		)
 	}
 
 	for i, logg := range logs {

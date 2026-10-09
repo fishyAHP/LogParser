@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
+	"fishyAHP/LogParser.git/internal/features/parse/common"
 )
 
 type JSONParser struct {
@@ -20,20 +21,27 @@ func New(scheme *domain.Scheme) *JSONParser {
 	}
 }
 
-func (jp *JSONParser) Parse(data []byte) (domain.LogEntry, error) {
+func (jp *JSONParser) Parse(data []byte) (domain.ParsedLog, error) {
 	var values map[string]jsontext.Value
 	if err := jsonv2.Unmarshal(data, &values); err != nil {
-		return domain.LogEntry{}, fmt.Errorf(
+		return domain.ParsedLog{}, fmt.Errorf(
 			"unmarshal json: %w",
 			err,
 		)
 	}
 
-	res := make([]domain.Value, 0, len(jp.scheme.Parameters))
+	fields := make([]string, 0, len(values))
+	for name := range values {
+		fields = append(fields, name)
+	}
+
+	entry := domain.LogEntry{
+		Values: make([]domain.Value, 0, len(jp.scheme.Parameters)),
+	}
 	for _, field := range jp.scheme.Parameters {
 		strVal, ok := values[field.Name]
 		if !ok {
-			return domain.LogEntry{}, fmt.Errorf(
+			return domain.ParsedLog{}, fmt.Errorf(
 				"field %q not found",
 				field.Name,
 			)
@@ -41,17 +49,20 @@ func (jp *JSONParser) Parse(data []byte) (domain.LogEntry, error) {
 
 		val, err := decodeValue(strVal, field.FieldType)
 		if err != nil {
-			return domain.LogEntry{}, fmt.Errorf(
+			return domain.ParsedLog{}, fmt.Errorf(
 				"decode field %q: %w",
 				field.Name,
 				err,
 			)
 		}
 
-		res = append(res, val)
+		entry.Values = append(entry.Values, val)
 	}
 
-	return domain.LogEntry{Values: res}, nil
+	return domain.ParsedLog{
+		Entry:  entry,
+		Fields: fields,
+	}, nil
 }
 
 func decodeValue(
@@ -115,15 +126,10 @@ func decodeValue(
 	}
 }
 
-type ProjectedField struct {
-	Name  string
-	Value jsontext.Value
-}
-
-func (jp *JSONParser) Projection(
+func (jp *JSONParser) Project(
 	data []byte,
 	fields []string,
-) ([]ProjectedField, error) {
+) (common.Projections, error) {
 	var values map[string]jsontext.Value
 	if err := jsonv2.Unmarshal(data, &values); err != nil {
 		return nil, fmt.Errorf(
@@ -132,14 +138,14 @@ func (jp *JSONParser) Projection(
 		)
 	}
 
-	res := make([]ProjectedField, 0, len(fields))
+	res := make(common.Projections, 0, len(fields))
 	for _, field := range fields {
 		value, ok := values[field]
 		if !ok {
 			value = jsontext.Value("null")
 		}
 
-		res = append(res, ProjectedField{
+		res = append(res, common.ProjectedField{
 			Name:  field,
 			Value: value,
 		})

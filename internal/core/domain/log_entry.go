@@ -2,7 +2,13 @@ package domain
 
 import "time"
 
-// LogEntry логическое представление записи лога
+// ParsedLog all fields with LogEntry
+type ParsedLog struct {
+	Entry  LogEntry
+	Fields []string
+}
+
+// LogEntry indexing part of log
 type LogEntry struct {
 	Values []Value
 }

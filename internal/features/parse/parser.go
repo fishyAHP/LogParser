@@ -1,22 +1,22 @@
 package parse
 
 import (
+	"fmt"
+
 	"fishyAHP/LogParser.git/internal/core/domain"
+	"fishyAHP/LogParser.git/internal/features/parse/common"
 	"fishyAHP/LogParser.git/internal/features/parse/jsonparser"
 )
 
-// Parser представляет собой интерфейс, который позволяет с помощью метода Parse
-// превратить слайс байт в логическое представление лога и ошибку при невалидном входном слайсе
-type Parser interface {
-	Parse(data []byte) (domain.LogEntry, error)
-}
-
 type LogParser struct {
-	parser Parser
+	parser common.Parser
 }
 
-func NewParser(s *domain.Scheme, format domain.Format) *LogParser {
-	var parser Parser
+func NewParser(
+	s *domain.Scheme,
+	format domain.Format,
+) *LogParser {
+	var parser common.Parser
 	switch format {
 	case domain.JSON:
 		parser = jsonparser.New(s)
@@ -26,6 +26,23 @@ func NewParser(s *domain.Scheme, format domain.Format) *LogParser {
 	}
 }
 
-func (p *LogParser) Parse(data []byte) (domain.LogEntry, error) {
+func (p *LogParser) Parse(
+	data []byte,
+) (domain.ParsedLog, error) {
 	return p.parser.Parse(data)
+}
+
+func (p *LogParser) Project(
+	data []byte,
+	fields []string,
+) (common.Projections, error) {
+	projection, ok := p.parser.(common.Projection)
+	if !ok {
+		return nil, fmt.Errorf(
+			"unsupported projections: %T",
+			p.parser,
+		)
+	}
+
+	return projection.Project(data, fields)
 }

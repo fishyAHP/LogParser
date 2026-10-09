@@ -38,7 +38,9 @@ var (
 	ErrRecordNotFound = errors.New("id not found")
 )
 
-func New(path string) (*Storage, error) {
+func New(
+	path string,
+) (*Storage, error) {
 	err := os.MkdirAll(path, 0o755)
 	if err != nil {
 		return nil, fmt.Errorf(
@@ -208,6 +210,10 @@ func (s *Storage) recover() error {
 		)
 	}
 	return nil
+}
+
+func (s *Storage) RecordsCount() uint64 {
+	return s.recordsCount
 }
 
 func (s *Storage) Write(data []byte) (domain.RecordID, error) {
