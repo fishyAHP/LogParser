@@ -12,11 +12,11 @@ import (
 type rbTree[K common.Key] struct {
 	root *node[K]
 
-	// t.compare returns
+	// compare return
 	// -1 if k1 less than k2
 	// 0 if k1 equal to k2
 	// 1 if k1 more than k2
-	// it need to find place for insert in rb-tree
+	// it needs to find place for insert in rb-tree
 	compare func(K, K) int
 
 	elemsCount int

@@ -20,9 +20,6 @@ func New(scheme *domain.Scheme) *JSONParser {
 	}
 }
 
-// Parse принимает слайс байт на выходе должна дать лог.
-// Если jsonparser не валидный то возвращаешь ошибку, можешь сделать отдельный файл для описания типа ошибки.
-// Можешь сделать промежуточную структуру для декодирования jsonparser'а.
 func (jp *JSONParser) Parse(data []byte) (domain.LogEntry, error) {
 	var values map[string]jsontext.Value
 	if err := jsonv2.Unmarshal(data, &values); err != nil {
@@ -116,4 +113,37 @@ func decodeValue(
 	default:
 		return nil, fmt.Errorf("unknown type in scheme: %v", typ)
 	}
+}
+
+type ProjectedField struct {
+	Name  string
+	Value jsontext.Value
+}
+
+func (jp *JSONParser) Projection(
+	data []byte,
+	fields []string,
+) ([]ProjectedField, error) {
+	var values map[string]jsontext.Value
+	if err := jsonv2.Unmarshal(data, &values); err != nil {
+		return nil, fmt.Errorf(
+			"unmarshal json: %w",
+			err,
+		)
+	}
+
+	res := make([]ProjectedField, 0, len(fields))
+	for _, field := range fields {
+		value, ok := values[field]
+		if !ok {
+			value = jsontext.Value("null")
+		}
+
+		res = append(res, ProjectedField{
+			Name:  field,
+			Value: value,
+		})
+	}
+
+	return res, nil
 }

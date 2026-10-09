@@ -5,9 +5,15 @@ import (
 	"fmt"
 )
 
+// Grammar:
+// query  	  = SELECT fields [WHERE expression] | expression
+// fields 	  = "*" | identifier {"," identifier}
+// expression = orExpr
+
 type Syntaxes struct {
-	Lex *Lexer
-	pos int
+	Lex     *Lexer
+	lexemes []Lexeme
+	pos     int
 }
 
 func NewSyntaxes(lexer *Lexer) *Syntaxes {
@@ -16,51 +22,193 @@ func NewSyntaxes(lexer *Lexer) *Syntaxes {
 	}
 }
 
-func (q *Syntaxes) Query(input string) (Expr, error) {
-	q.pos = 0
-	lexemes, err := q.Lex.Parse(input)
-	if err != nil {
-		return nil, fmt.Errorf("query parse input: %w", err)
+var (
+	ErrUnexpectedLexeme = errors.New("unexpected lexeme type")
+)
+
+func (s *Syntaxes) current() Lexeme {
+	return s.lexemes[s.pos]
+}
+
+func (s *Syntaxes) advance() {
+	if s.pos < len(s.lexemes)-1 {
+		s.pos++
+	}
+}
+
+func (s *Syntaxes) check(t LexemeType) bool {
+	return s.current().Type == t
+}
+
+func (s *Syntaxes) match(t LexemeType) bool {
+	if s.check(t) {
+		return false
 	}
 
-	expression, err := q.parseExpression(lexemes)
+	s.advance()
+	return true
+}
+
+func (s *Syntaxes) expect(t LexemeType) (Lexeme, error) {
+	lexeme := s.current()
+
+	if !s.match(t) {
+		return Lexeme{}, fmt.Errorf(
+			"%w: want %s, got %s",
+			ErrUnexpectedLexeme,
+			t,
+			lexeme.Type,
+		)
+	}
+
+	return lexeme, nil
+}
+
+// Query represents a parsed query:
+//
+// Valid states:
+//
+//  1. Fields == nil, Where != nil:
+//     Old filtering without SELECT
+//
+//  2. Fields == ["*"], Where != nil:
+//     All fields with filtering
+//
+//  3. Fields contain field names, Where != nil:
+//     Field projection with filtering
+//
+//  4. Fields contain field names, Where == nil:
+//     Field projection without filtering
+//
+//  5. Fields == ["*"], Where == nil:
+//     SELECT all records
+type Query struct {
+	Fields []string
+	Where  Expr
+}
+
+func (s *Syntaxes) Query(input string) (Query, error) {
+	lexemes, err := s.Lex.Parse(input)
+	if err != nil {
+		return Query{}, fmt.Errorf(
+			"query parse input: %w",
+			err,
+		)
+	}
+
+	if len(lexemes) == 0 {
+		return Query{}, errors.New(
+			"empty query",
+		)
+	}
+	s.lexemes = lexemes
+	s.pos = 0
+
+	first := s.current()
+	query := Query{}
+
+	switch first.Type {
+	case SelectType:
+		s.advance()
+
+		fields, err := s.parseFields()
+		if err != nil {
+			return Query{}, err
+		}
+		query.Fields = fields
+
+		switch s.current().Type {
+		case WhereType:
+			s.advance()
+
+			expr, err := s.parseOr()
+			if err != nil {
+				return Query{}, err
+			}
+
+			query.Where = expr
+		case EOF:
+			return query, nil
+		default:
+			return Query{}, fmt.Errorf(
+				"%w: %s",
+				ErrUnexpectedLexeme,
+				lexemes[s.pos].Type,
+			)
+		}
+	default:
+		expr, err := s.parseOr()
+		if err != nil {
+			return Query{}, err
+		}
+
+		query.Where = expr
+	}
+
+	if !s.match(EOF) {
+		return Query{}, fmt.Errorf(
+			"%w %s",
+			ErrUnexpectedLexeme,
+			lexemes[s.pos].Type,
+		)
+	}
+
+	return query, nil
+}
+
+func (s *Syntaxes) parseFields() ([]string, error) {
+	if s.match(AsteriskType) {
+		return []string{"*"}, nil
+	}
+
+	first, err := s.expect(Identifier)
 	if err != nil {
 		return nil, err
 	}
 
-	if lexemes[q.pos].Type != EOF {
-		return nil, fmt.Errorf("unexpected lexeme %s", lexemes[q.pos].Type)
-	}
+	fields := make([]string, 0, 5)
+	fields = append(fields, first.Literal)
 
-	return expression, nil
-}
-
-func (q *Syntaxes) parseExpression(lexemes []Lexeme) (Expr, error) {
-	expression, err := q.parseOr(lexemes)
-	if err != nil {
-		return nil, fmt.Errorf("parse or: %w", err)
-	}
-
-	return expression, nil
-}
-
-func (q *Syntaxes) parseOr(lexemes []Lexeme) (Expr, error) {
-	left, err := q.parseAnd(lexemes)
-	if err != nil {
-		return nil, fmt.Errorf("left parse and: %w", err)
-	}
-
-	if q.pos >= len(lexemes) {
-		return left, nil
-	}
-
-	for q.pos < len(lexemes) &&
-		lexemes[q.pos].Type == OrType {
-		q.pos++
-
-		right, err := q.parseAnd(lexemes)
+	for s.match(CommaType) {
+		field, err := s.expect(Identifier)
 		if err != nil {
-			return nil, fmt.Errorf("right parse and: %w", err)
+			return nil, err
+		}
+
+		fields = append(fields, field.Literal)
+	}
+
+	return fields, nil
+}
+
+func (s *Syntaxes) parseExpression() (Expr, error) {
+	expression, err := s.parseOr()
+	if err != nil {
+		return nil, fmt.Errorf(
+			"parse or: %w",
+			err,
+		)
+	}
+
+	return expression, nil
+}
+
+func (s *Syntaxes) parseOr() (Expr, error) {
+	left, err := s.parseAnd()
+	if err != nil {
+		return nil, fmt.Errorf(
+			"left parse and: %w",
+			err,
+		)
+	}
+
+	for s.match(OrType) {
+		right, err := s.parseAnd()
+		if err != nil {
+			return nil, fmt.Errorf(
+				"right parse and: %w",
+				err,
+			)
 		}
 
 		left = &BinaryExpr{
@@ -73,23 +221,23 @@ func (q *Syntaxes) parseOr(lexemes []Lexeme) (Expr, error) {
 	return left, nil
 }
 
-func (q *Syntaxes) parseAnd(lexemes []Lexeme) (Expr, error) {
-	left, err := q.parsePrimary(lexemes)
+func (s *Syntaxes) parseAnd() (Expr, error) {
+	left, err := s.parsePrimary()
 	if err != nil {
-		return nil, fmt.Errorf("query parse primary: %w", err)
+		return nil, fmt.Errorf(
+			"query parse primary: %w",
+			err,
+		)
 	}
 
-	if q.pos >= len(lexemes) {
-		return left, nil
-	}
-
-	for q.pos < len(lexemes) &&
-		lexemes[q.pos].Type == AndType {
-		q.pos++
-		right, err := q.parsePrimary(lexemes)
+	for s.match(AndType) {
+		right, err := s.parsePrimary()
 
 		if err != nil {
-			return nil, fmt.Errorf("right parse primary: %w", err)
+			return nil, fmt.Errorf(
+				"right parse primary: %w",
+				err,
+			)
 		}
 
 		left = &BinaryExpr{
@@ -102,58 +250,58 @@ func (q *Syntaxes) parseAnd(lexemes []Lexeme) (Expr, error) {
 	return left, nil
 }
 
-func (q *Syntaxes) parsePrimary(lexemes []Lexeme) (Expr, error) {
-	if q.pos < len(lexemes) &&
-		lexemes[q.pos].Type == LeftParen {
-		q.pos++
-		expression, err := q.parseExpression(lexemes)
+func (s *Syntaxes) parsePrimary() (Expr, error) {
+	if s.match(LeftParen) {
+		expression, err := s.parseExpression()
 		if err != nil {
-			return nil, fmt.Errorf("primary parse expression: %w", err)
+			return nil, fmt.Errorf(
+				"parse expression: %w",
+				err,
+			)
 		}
 
-		if q.pos >= len(lexemes) {
-			return nil, errors.New("want ')' lexeme, got EOF")
-		}
-		if lexemes[q.pos].Type != RightParen {
-			return nil, fmt.Errorf("incorrect lexeme: want ')', got %s", lexemes[q.pos].Type)
+		if _, err = s.expect(RightParen); err != nil {
+			return nil, err
 		}
 
-		q.pos++
 		return expression, nil
 	}
 
-	return q.parseComparison(lexemes)
+	return s.parseComparison()
 }
 
-func (q *Syntaxes) parseComparison(lexemes []Lexeme) (Expr, error) {
-	var cond Condition
-
-	if q.pos+2 >= len(lexemes) {
-		return nil, errors.New("index out of ranged")
+func (s *Syntaxes) parseComparison() (Expr, error) {
+	field, err := s.expect(Identifier)
+	if err != nil {
+		return nil, err
 	}
 
-	field := lexemes[q.pos]
-	if field.Type != Identifier {
-		return nil, fmt.Errorf("mismatched identifier, got %s", field.Type)
-	}
-	cond.Field = field.Literal
-
-	op := lexemes[q.pos+1]
+	op := s.current()
 	conditionOp, ok := Map(op.Type)
 	if !ok {
-		return nil, errors.New("not found compare operator")
+		return nil, errors.New(
+			"not found compare operator",
+		)
 	}
-	cond.Operator = conditionOp
+	s.advance()
 
-	value := lexemes[q.pos+2]
-	if !(value.Type == Number ||
-		value.Type == String) {
-		return nil, fmt.Errorf("expected number or string value, got %s", value.Type)
+	value := s.current()
+	switch value.Type {
+	case Number, String, Bool:
+		s.advance()
+
+	default:
+		return nil, fmt.Errorf(
+			"expected number, string or bool value, got %s",
+			value.Type,
+		)
 	}
-	cond.Value = value
 
-	q.pos += 3
-	return &cond, nil
+	return &Condition{
+		Field:    field.Literal,
+		Operator: conditionOp,
+		Value:    value,
+	}, nil
 }
 
 func Map(t LexemeType) (CompareOperator, bool) {
