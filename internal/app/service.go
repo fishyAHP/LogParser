@@ -198,6 +198,18 @@ func (s *Service) Query(q string) ([][]byte, error) {
 		)
 	}
 
+	if result.Counting {
+		count := s.store.RecordsCount()
+
+		if !result.FullScan {
+			count = uint64(result.Posting.Len())
+		}
+
+		return [][]byte{
+			[]byte(fmt.Sprintf(`{"COUNT(*)":%d}`, count)),
+		}, nil
+	}
+
 	limit := s.store.RecordsCount()
 	if result.Limit != nil {
 		limit = *result.Limit
@@ -207,9 +219,9 @@ func (s *Service) Query(q string) ([][]byte, error) {
 		return nil, nil
 	}
 
+	res := make([][]byte, 0, limit)
 	if result.FullScan {
 		iterator := s.store.Iterator()
-		res := make([][]byte, 0)
 
 		for limit > 0 &&
 			iterator.Next() {
@@ -236,12 +248,10 @@ func (s *Service) Query(q string) ([][]byte, error) {
 				err,
 			)
 		}
-
 		return res, nil
 	}
 
 	sl := result.Posting.Slice()
-	res := make([][]byte, 0, limit)
 	for _, record := range sl {
 		if limit == 0 {
 			break
@@ -270,7 +280,6 @@ func (s *Service) Query(q string) ([][]byte, error) {
 		limit--
 		res = append(res, data)
 	}
-
 	return res, nil
 }
 

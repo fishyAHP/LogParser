@@ -39,6 +39,7 @@ type Result struct {
 	Posting  *structs.PostingList
 	FullScan bool
 	Limit    *uint64
+	Counting bool
 }
 
 func (e *Executor) Execute(
@@ -61,7 +62,8 @@ func (e *Executor) Execute(
 	}
 
 	if typed.Expression == nil {
-		if len(typed.Fields) == 0 {
+		if len(typed.Fields) == 0 &&
+			!typed.Counting {
 			return Result{}, errors.New(
 				"empty typed expression",
 			)
@@ -71,6 +73,7 @@ func (e *Executor) Execute(
 			Fields:   typed.Fields,
 			FullScan: true,
 			Limit:    typed.Limit,
+			Counting: typed.Counting,
 		}, nil
 	}
 
@@ -82,9 +85,10 @@ func (e *Executor) Execute(
 		)
 	}
 	return Result{
-		Posting: res,
-		Fields:  typed.Fields,
-		Limit:   typed.Limit,
+		Posting:  res,
+		Fields:   typed.Fields,
+		Limit:    typed.Limit,
+		Counting: typed.Counting,
 	}, nil
 }
 

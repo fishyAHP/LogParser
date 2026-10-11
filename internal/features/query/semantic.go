@@ -42,6 +42,7 @@ type TypedQuery struct {
 	Fields     []string
 	Expression TypedExpr
 	Limit      *uint64
+	Counting   bool
 }
 
 func allowedOperators(typ domain.IndexType) CompareOperator {
@@ -91,6 +92,7 @@ func (s *SemanticAnalyzer) Analyze(
 		Fields:     fields,
 		Expression: typed,
 		Limit:      query.Limit,
+		Counting:   query.Counting,
 	}, nil
 }
 

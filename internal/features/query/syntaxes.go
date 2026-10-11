@@ -96,9 +96,10 @@ func (s *Syntaxes) expect(t LexemeType) (Lexeme, error) {
 //  3. Limit > 0:
 //     Expect Limit records
 type Query struct {
-	Fields []string
-	Where  Expr
-	Limit  *uint64
+	Fields   []string
+	Where    Expr
+	Limit    *uint64
+	Counting bool
 }
 
 func (s *Syntaxes) Query(
@@ -122,15 +123,27 @@ func (s *Syntaxes) Query(
 
 	var query Query
 	if s.match(SelectType) {
-		fields, err := s.parseFields()
+		counting, err := s.parseCount()
 		if err != nil {
 			return Query{}, fmt.Errorf(
-				"parse SELECT fields: %w",
+				"parse count: %w",
 				err,
 			)
 		}
+		if counting {
+			query.Counting = counting
+		} else {
+			fields, err := s.parseFields()
 
-		query.Fields = fields
+			if err != nil {
+				return Query{}, fmt.Errorf(
+					"parse SELECT fields: %w",
+					err,
+				)
+			}
+
+			query.Fields = fields
+		}
 
 		if s.match(WhereType) {
 			expr, err := s.parseOr()
@@ -169,6 +182,25 @@ func (s *Syntaxes) Query(
 	return query, nil
 }
 
+func (s *Syntaxes) parseCount() (bool, error) {
+	if !s.match(CountType) {
+		return false, nil
+	}
+
+	if _, err := s.expect(LeftParen); err != nil {
+		return false, err
+	}
+
+	if _, err := s.expect(AsteriskType); err != nil {
+		return false, err
+	}
+
+	if _, err := s.expect(RightParen); err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
 func (s *Syntaxes) parseFields() ([]string, error) {
 	if s.match(AsteriskType) {
 		return []string{"*"}, nil
