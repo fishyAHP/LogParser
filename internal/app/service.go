@@ -3,6 +3,7 @@ package app
 import (
 	"bufio"
 	"bytes"
+	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -15,10 +16,12 @@ import (
 )
 
 type Service struct {
-	index    *index.Service
+	index    *index.Manager
 	executor *query.Executor
 	parser   *parse.LogParser
 	store    *storage.Storage
+
+	catalog *domain.FieldsCatalog
 }
 
 func NewService(
@@ -45,13 +48,7 @@ func newService(
 	format domain.Format,
 	storagePath string,
 ) (*Service, error) {
-	idx, err := index.New(scheme)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"new index: %w",
-			err,
-		)
-	}
+	catalog := domain.NewCatalog()
 
 	store, err := storage.New(storagePath)
 	if err != nil {
@@ -61,7 +58,16 @@ func newService(
 		)
 	}
 
-	executor := query.NewExecutor(idx)
+	idx, err := index.New(scheme)
+	if err != nil {
+		_ = store.Close()
+		return nil, fmt.Errorf(
+			"new index: %w",
+			err,
+		)
+	}
+
+	executor := query.NewExecutor(idx, catalog)
 	parser := parse.NewParser(scheme, format)
 
 	service := &Service{
@@ -69,9 +75,10 @@ func newService(
 		store:    store,
 		index:    idx,
 		executor: executor,
+		catalog:  catalog,
 	}
 
-	if err = service.rebuildIndexes(); err != nil {
+	if err = service.rebuildMetadata(); err != nil {
 		_ = store.Close()
 		return nil, fmt.Errorf(
 			"%w: %w",
@@ -85,8 +92,9 @@ func newService(
 
 func (s *Service) RebuildIndexes() error {
 	s.index.Clear()
+	s.catalog.Clear()
 
-	if err := s.rebuildIndexes(); err != nil {
+	if err := s.rebuildMetadata(); err != nil {
 		return fmt.Errorf(
 			"%w: %w",
 			ErrIndexRebuild,
@@ -96,12 +104,12 @@ func (s *Service) RebuildIndexes() error {
 	return nil
 }
 
-func (s *Service) rebuildIndexes() error {
+func (s *Service) rebuildMetadata() error {
 	iter := s.store.Iterator()
 	for iter.Next() {
 		data := iter.Data()
 
-		entry, err := s.parser.Parse(data)
+		parsed, err := s.parser.Parse(data)
 		if err != nil {
 			return fmt.Errorf(
 				"parse iter data: %w",
@@ -110,8 +118,8 @@ func (s *Service) rebuildIndexes() error {
 		}
 
 		if err := s.index.Index(
-			iter.Record(),
-			entry,
+			iter.RecordID(),
+			parsed.Entry,
 		); err != nil {
 			return fmt.Errorf(
 				"indexing record: %w",
@@ -119,6 +127,7 @@ func (s *Service) rebuildIndexes() error {
 			)
 		}
 
+		s.catalog.Add(parsed.Fields...)
 	}
 
 	if err := iter.Err(); err != nil {
@@ -129,7 +138,7 @@ func (s *Service) rebuildIndexes() error {
 }
 
 func (s *Service) Ingest(raw []byte) error {
-	logentry, err := s.parser.Parse(raw)
+	parsed, err := s.parser.Parse(raw)
 	if err != nil {
 		return fmt.Errorf("parse raw byte: %w", err)
 	}
@@ -140,9 +149,11 @@ func (s *Service) Ingest(raw []byte) error {
 		return fmt.Errorf("storage write: %w", err)
 	}
 
-	if err = s.index.Index(record, logentry); err != nil {
+	if err = s.index.Index(record, parsed.Entry); err != nil {
 		return fmt.Errorf("indexing log: %w", err)
 	}
+
+	s.catalog.Add(parsed.Fields...)
 
 	return nil
 }
@@ -162,25 +173,89 @@ func (s *Service) IngestReader(reader io.Reader) error {
 		}
 
 		if err := s.Ingest(raw); err != nil {
-			return fmt.Errorf("ingest record: %w", err)
+			return fmt.Errorf(
+				"ingest record: %w",
+				err,
+			)
 		}
 	}
 
 	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("scanner error: %w", err)
+		return fmt.Errorf(
+			"scanner error: %w",
+			err,
+		)
 	}
 	return nil
 }
 
 func (s *Service) Query(q string) ([][]byte, error) {
-	records, err := s.executor.Execute(q)
+	result, err := s.executor.Execute(q)
 	if err != nil {
-		return nil, fmt.Errorf("executing raw: %w", err)
+		return nil, fmt.Errorf(
+			"executing raw: %w",
+			err,
+		)
 	}
 
-	sl := records.Slice()
-	res := make([][]byte, 0, len(sl))
+	if result.Counting {
+		count := s.store.RecordsCount()
+
+		if !result.FullScan {
+			count = uint64(result.Posting.Len())
+		}
+
+		return [][]byte{
+			[]byte(fmt.Sprintf(`{"COUNT(*)":%d}`, count)),
+		}, nil
+	}
+
+	limit := s.store.RecordsCount()
+	if result.Limit != nil {
+		limit = *result.Limit
+	}
+
+	if limit == 0 {
+		return nil, nil
+	}
+
+	res := make([][]byte, 0, limit)
+	if result.FullScan {
+		iterator := s.store.Iterator()
+
+		for limit > 0 &&
+			iterator.Next() {
+			data, err := s.project(iterator.Data(), result.Fields)
+			if err != nil {
+				return nil, fmt.Errorf(
+					"full scan projection: %w",
+					err,
+				)
+			}
+
+			if len(result.Fields) == 0 ||
+				(len(result.Fields) == 1 && result.Fields[0] == "*") {
+				data = bytes.Clone(data)
+			}
+
+			limit--
+			res = append(res, data)
+		}
+
+		if err = iterator.Err(); err != nil {
+			return nil, fmt.Errorf(
+				"storage iterator: %w",
+				err,
+			)
+		}
+		return res, nil
+	}
+
+	sl := result.Posting.Slice()
 	for _, record := range sl {
+		if limit == 0 {
+			break
+		}
 
 		data, err := s.store.ReadByID(record)
 		if err != nil {
@@ -194,7 +269,43 @@ func (s *Service) Query(q string) ([][]byte, error) {
 			)
 		}
 
+		data, err = s.project(data, result.Fields)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"with index projection: %w",
+				err,
+			)
+		}
+
+		limit--
 		res = append(res, data)
+	}
+	return res, nil
+}
+
+func (s *Service) project(
+	data []byte,
+	fields []string,
+) ([]byte, error) {
+	if len(fields) == 0 ||
+		(len(fields) == 1 && fields[0] == "*") {
+		return data, nil
+	}
+
+	projections, err := s.parser.Project(data, fields)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"parser project: %w",
+			err,
+		)
+	}
+
+	res, err := json.Marshal(projections)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"json marshal: %w",
+			err,
+		)
 	}
 
 	return res, nil

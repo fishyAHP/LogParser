@@ -47,12 +47,11 @@ func (t *Tokenizer) splitString(s string) []Token {
 	var start int
 
 	res := make([]Token, 0, len(s)/6)
-	runes := []rune(s)
 
-	for i, r := range runes {
+	for i, r := range s {
 		if !unicode.IsLetter(r) && !unicode.IsDigit(r) {
 			if start < i {
-				token := Token(runes[start:i])
+				token := Token(s[start:i])
 
 				if t.isValid(token) {
 					res = append(res, token)
@@ -63,8 +62,8 @@ func (t *Tokenizer) splitString(s string) []Token {
 		}
 	}
 
-	if start < len(runes) {
-		token := Token(runes[start:])
+	if start < len(s) {
+		token := Token(s[start:])
 		if t.isValid(token) {
 			res = append(res, token)
 		}

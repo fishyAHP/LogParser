@@ -23,9 +23,6 @@ type node[K comparable] struct {
 }
 
 func newNode[K comparable](key K, value domain.RecordID) *node[K] {
-	s := structs.NewSet[domain.RecordID](0)
-	s.Add(value)
-
 	return &node[K]{
 		key:     key,
 		records: newRecs(value),
@@ -111,4 +108,16 @@ func (r *records) slice() []domain.RecordID {
 		return []domain.RecordID{r.single}
 	}
 	return r.many.Slice()
+}
+
+func (r *records) contains(id domain.RecordID) bool {
+	if r.single == 0 &&
+		r.many == nil {
+		return false
+	}
+
+	if r.many == nil {
+		return r.single == id
+	}
+	return r.many.Contains(id)
 }

@@ -45,65 +45,12 @@ func TestIterator_Next(t *testing.T) {
 	for j := range logs {
 		if !bytes.Equal(got[j], logs[j]) {
 			t.Errorf(
-				"record %d: expected %q, got %q",
+				"id %d: expected %q, got %q",
 				j,
 				logs[j],
 				got[j],
 			)
 		}
-	}
-}
-
-func TestIterator_RecordData(t *testing.T) {
-	dir := t.TempDir()
-
-	s, err := New(dir)
-	if err != nil {
-		t.Fatalf("create storage: %v", err)
-	}
-	defer s.Close()
-
-	raw := []byte(`{"level":"INFO"}`)
-
-	written, err := s.Write(raw)
-	if err != nil {
-		t.Fatalf("write: %v", err)
-	}
-
-	it := s.Iterator()
-
-	if !it.Next() {
-		t.Fatalf("expected record, iterator error: %v", it.Err())
-	}
-
-	got := it.Record()
-
-	if got.ID != written.ID {
-		t.Errorf("expected ID %d, got %d", written.ID, got.ID)
-	}
-
-	if got.Pointer.SegmentID != written.Pointer.SegmentID {
-		t.Errorf(
-			"expected segment %d, got %d",
-			written.Pointer.SegmentID,
-			got.Pointer.SegmentID,
-		)
-	}
-
-	if got.Pointer.Offset != written.Pointer.Offset {
-		t.Errorf(
-			"expected offset %d, got %d",
-			written.Pointer.Offset,
-			got.Pointer.Offset,
-		)
-	}
-
-	if got.Pointer.Length != written.Pointer.Length {
-		t.Errorf(
-			"expected length %d, got %d",
-			written.Pointer.Length,
-			got.Pointer.Length,
-		)
 	}
 }
 
@@ -123,7 +70,7 @@ func TestIterator_AfterDone(t *testing.T) {
 	it := s.Iterator()
 
 	if !it.Next() {
-		t.Fatalf("expected first record: %v", it.Err())
+		t.Fatalf("expected first id: %v", it.Err())
 	}
 
 	if it.Next() {

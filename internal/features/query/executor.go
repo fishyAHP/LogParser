@@ -4,20 +4,27 @@ import (
 	"errors"
 	"fmt"
 
+	"fishyAHP/LogParser.git/internal/core/domain"
 	"fishyAHP/LogParser.git/internal/features/index"
 	"fishyAHP/LogParser.git/internal/features/index/common"
 	"fishyAHP/LogParser.git/internal/features/index/structs"
 )
 
 type Executor struct {
-	indexes  *index.Service
+	indexes *index.Manager
+	catalog *domain.FieldsCatalog
+
 	syntax   *Syntaxes
 	semantic *SemanticAnalyzer
 }
 
-func NewExecutor(indexes *index.Service) *Executor {
+func NewExecutor(
+	indexes *index.Manager,
+	catalog *domain.FieldsCatalog,
+) *Executor {
 	return &Executor{
 		indexes: indexes,
+		catalog: catalog,
 		syntax: NewSyntaxes(
 			NewLexer(),
 		),
@@ -27,33 +34,62 @@ func NewExecutor(indexes *index.Service) *Executor {
 	}
 }
 
+type Result struct {
+	Fields   []string
+	Posting  *structs.PostingList
+	FullScan bool
+	Limit    *uint64
+	Counting bool
+}
+
 func (e *Executor) Execute(
 	s string,
-) (*structs.PostingList, error) {
-	expr, err := e.syntax.Query(s)
+) (Result, error) {
+	query, err := e.syntax.Query(s)
 	if err != nil {
-		return nil, fmt.Errorf(
+		return Result{}, fmt.Errorf(
 			"syntax query: %w",
 			err,
 		)
 	}
 
-	typedExpr, err := e.semantic.Analyze(expr)
+	typed, err := e.semantic.Analyze(query, e.catalog)
 	if err != nil {
-		return nil, fmt.Errorf(
+		return Result{}, fmt.Errorf(
 			"semantic analyze: %w",
 			err,
 		)
 	}
 
-	res, err := e.executeExpr(typedExpr)
+	if typed.Expression == nil {
+		if len(typed.Fields) == 0 &&
+			!typed.Counting {
+			return Result{}, errors.New(
+				"empty typed expression",
+			)
+		}
+
+		return Result{
+			Fields:   typed.Fields,
+			FullScan: true,
+			Limit:    typed.Limit,
+			Counting: typed.Counting,
+		}, nil
+	}
+
+	res, err := e.executeExpr(typed.Expression)
 	if err != nil {
-		return nil, fmt.Errorf(
+		return Result{}, fmt.Errorf(
 			"execute expression: %w",
 			err,
 		)
 	}
-	return res, nil
+	return Result{
+		Posting:  res,
+		Fields:   typed.Fields,
+		Limit:    typed.Limit,
+		Counting: typed.Counting,
+	}, nil
 }
 
 func (e *Executor) executeExpr(
@@ -89,7 +125,7 @@ func (e *Executor) executeExpr(
 		case Equal:
 			res, err := e.indexes.Exact(ex.Field, ex.Value)
 			if err != nil {
-				if errors.Is(err, common.ErrNotFoundRecord) {
+				if errors.Is(err, common.ErrRecordNotFound) {
 					return &structs.PostingList{}, nil
 				}
 				return nil, fmt.Errorf(
@@ -106,7 +142,7 @@ func (e *Executor) executeExpr(
 
 			posting, err := e.indexes.Range(ex.Field, nil, right)
 			if err != nil {
-				if errors.Is(err, common.ErrNotFoundRecord) {
+				if errors.Is(err, common.ErrRecordNotFound) {
 					return &structs.PostingList{}, nil
 				}
 				return nil, fmt.Errorf(
@@ -123,7 +159,7 @@ func (e *Executor) executeExpr(
 
 			posting, err := e.indexes.Range(ex.Field, left, nil)
 			if err != nil {
-				if errors.Is(err, common.ErrNotFoundRecord) {
+				if errors.Is(err, common.ErrRecordNotFound) {
 					return &structs.PostingList{}, nil
 				}
 				return nil, fmt.Errorf(

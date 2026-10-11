@@ -7,19 +7,22 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
 )
 
 type Iterator struct {
-	storage *Storage
+	dir string
 
 	segmentID uint64
 	offset    uint64
 	file      *os.File
 
-	data   []byte
-	record domain.RecordID
+	header  [RecordHeaderSize]byte
+	data    []byte
+	id      domain.RecordID
+	pointer domain.RecordPointer
 
 	err  error
 	done bool
@@ -31,7 +34,7 @@ func (i *Iterator) Next() bool {
 	}
 
 	var err error
-	dir := i.storage.dir
+	dir := i.dir
 	curOffset := i.offset
 	curID := i.segmentID
 
@@ -51,9 +54,8 @@ func (i *Iterator) Next() bool {
 		curOffset = uint64(len(Magic))
 	}
 
-	buf := make([]byte, RecordHeaderSize)
 	for {
-		if n, err := i.file.ReadAt(buf, int64(curOffset)); err != nil {
+		if n, err := i.file.ReadAt(i.header[:], int64(curOffset)); err != nil {
 			if errors.Is(err, io.EOF) && n == 0 {
 				err = i.file.Close()
 				i.file = nil
@@ -83,14 +85,22 @@ func (i *Iterator) Next() bool {
 		break
 	}
 
-	length := binary.BigEndian.Uint32(buf[0:4])
-	recordID := binary.BigEndian.Uint64(buf[4:])
+	length := binary.BigEndian.Uint32(i.header[0:4])
+	if FileSize(length)+RecordHeaderSize >= MaxSegmentSize {
+		i.err = ErrRecordTooLarge
+		return false
+	}
 
-	buf = make([]byte, length)
+	recordID := binary.BigEndian.Uint64(i.header[4:])
+
+	if cap(i.data) < int(length) {
+		i.data = slices.Grow(i.data, int(length)-len(i.data))
+	}
+	i.data = i.data[:int(length)]
 
 	curOffset += uint64(RecordHeaderSize)
 	if _, err = i.file.ReadAt(
-		buf,
+		i.data,
 		int64(curOffset),
 	); err != nil {
 		i.err = err
@@ -100,20 +110,12 @@ func (i *Iterator) Next() bool {
 	i.segmentID = curID
 	i.offset = curOffset + uint64(length)
 
-	i.data = buf
-	i.record = domain.RecordID(recordID)
-
-	if recordID > i.storage.recordsCount {
-		i.storage.recordsCount = recordID
+	i.id = domain.RecordID(recordID)
+	i.pointer = domain.RecordPointer{
+		Offset:    curOffset,
+		Length:    length,
+		SegmentID: curID,
 	}
-
-	i.storage.records = append(
-		i.storage.records,
-		domain.RecordPointer{
-			Offset:    curOffset,
-			Length:    length,
-			SegmentID: curID,
-		})
 
 	return true
 }
@@ -134,6 +136,15 @@ func openFile(dir string, curID uint64) (*os.File, error) {
 		)
 	}
 
+	err = validateFileHeader(file)
+	if err != nil {
+		_ = file.Close()
+		return nil, fmt.Errorf(
+			"validate header: %w",
+			err,
+		)
+	}
+
 	return file, nil
 }
 
@@ -141,13 +152,35 @@ func (i *Iterator) Data() []byte {
 	return i.data
 }
 
-func (i *Iterator) Record() domain.RecordID {
-	return i.record
+func (i *Iterator) RecordID() domain.RecordID {
+	return i.id
+}
+
+func (i *Iterator) Pointer() domain.RecordPointer {
+	return i.pointer
 }
 
 func (i *Iterator) Err() error {
 	if i.err != nil {
 		return i.err
+	}
+	return nil
+}
+
+func (i *Iterator) Close() error {
+	if i.file == nil {
+		return nil
+	}
+
+	err := i.file.Close()
+	i.file = nil
+	i.done = true
+
+	if err != nil {
+		return fmt.Errorf(
+			"close file: %w",
+			err,
+		)
 	}
 	return nil
 }

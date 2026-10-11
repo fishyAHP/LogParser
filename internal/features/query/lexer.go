@@ -15,8 +15,12 @@ type Lexer struct {
 func NewLexer() *Lexer {
 	return &Lexer{
 		keywords: map[string]LexemeType{
-			"and": AndType,
-			"or":  OrType,
+			"and":    AndType,
+			"or":     OrType,
+			"select": SelectType,
+			"where":  WhereType,
+			"limit":  LimitType,
+			"count":  CountType,
 		},
 		operators: map[string]LexemeType{
 			"=":  EqualType,
@@ -57,6 +61,14 @@ const (
 	LeftParen
 	RightParen
 
+	// SelectType and other for projection and filtering
+	SelectType
+	WhereType
+	CommaType
+	AsteriskType
+	LimitType
+	CountType
+
 	// EOF - end of file or string
 	EOF
 )
@@ -93,6 +105,18 @@ func (t LexemeType) String() string {
 		return "("
 	case RightParen:
 		return ")"
+	case SelectType:
+		return "SELECT"
+	case WhereType:
+		return "WHERE"
+	case AsteriskType:
+		return "*"
+	case CommaType:
+		return ","
+	case LimitType:
+		return "LIMIT"
+	case CountType:
+		return "COUNT"
 	case EOF:
 		return "EOF"
 	default:
@@ -172,6 +196,16 @@ func (l *Lexer) Parse(input string) ([]Lexeme, error) {
 
 			lexeme.Type = String
 			lexeme.Literal = builder.String()
+		case '*':
+			flush()
+
+			lexeme.Type = AsteriskType
+			lexeme.Literal = "*"
+		case ',':
+			flush()
+
+			lexeme.Type = CommaType
+			lexeme.Literal = ","
 		default:
 			builder.WriteRune(runes[i])
 			continue
