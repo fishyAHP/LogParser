@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"iter"
 
-	"fishyAHP/LogParser.git/internal/features/index/structs"
+	"fishyAHP/LogParser.git/internal/core/domain"
 	"fishyAHP/LogParser.git/internal/features/parse/common"
 	"fishyAHP/LogParser.git/internal/features/storage"
 )
@@ -15,7 +15,7 @@ import (
 type Rows = iter.Seq2[[]byte, error]
 
 func Scan(
-	posting *structs.PostingList,
+	posting iter.Seq[domain.RecordID],
 	store *storage.Storage,
 ) Rows {
 	return func(yield func([]byte, error) bool) {
@@ -37,8 +37,7 @@ func Scan(
 			return
 		}
 
-		// TODO need lazy iterator because Slice() returns a copy
-		for _, id := range posting.Slice() {
+		for id := range posting {
 			data, err := store.ReadByID(id)
 
 			if errors.Is(err, storage.ErrRecordNotFound) {

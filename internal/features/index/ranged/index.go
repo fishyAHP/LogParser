@@ -3,7 +3,6 @@ package ranged
 import (
 	"fmt"
 	"iter"
-	"slices"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
 	"fishyAHP/LogParser.git/internal/features/index/structs"
@@ -55,13 +54,7 @@ func (i *Index[K]) Range(
 		}
 	}
 
-	res, ok := i.tree.innerRange(fromBound, toBound)
-	if !ok {
-		return nil, common.ErrRecordNotFound
-	}
-
-	slices.Sort(res)
-	return slices.Values(res), nil
+	return i.tree.innerRange(fromBound, toBound), nil
 }
 
 func (i *Index[K]) Exact(

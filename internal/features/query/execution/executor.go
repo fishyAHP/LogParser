@@ -4,11 +4,11 @@ import (
 	"errors"
 	"fmt"
 	"iter"
+	"slices"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
 	"fishyAHP/LogParser.git/internal/features/index"
 	"fishyAHP/LogParser.git/internal/features/index/common"
-	"fishyAHP/LogParser.git/internal/features/index/structs"
 )
 
 type Executor struct {
@@ -125,9 +125,9 @@ func (e *Executor) executeExpr(
 
 		switch ex.Operator {
 		case Or:
-			return structs.UnionLists(left, right), nil
+			return union(left, right), nil
 		case And:
-			return structs.IntersectionLists(left, right), nil
+			return intersect(left, right), nil
 		default:
 			return nil, fmt.Errorf("unexpected logical operator")
 		}
@@ -137,7 +137,7 @@ func (e *Executor) executeExpr(
 			res, err := e.indexes.Exact(ex.Field, ex.Value)
 			if err != nil {
 				if errors.Is(err, common.ErrRecordNotFound) {
-					return nil, nil
+					return slices.Values([]domain.RecordID{}), nil
 				}
 				return nil, fmt.Errorf(
 					"indexes exact: %w",
@@ -154,7 +154,7 @@ func (e *Executor) executeExpr(
 			posting, err := e.indexes.Range(ex.Field, nil, right)
 			if err != nil {
 				if errors.Is(err, common.ErrRecordNotFound) {
-					return &structs.PostingList{}, nil
+					return slices.Values([]domain.RecordID{}), nil
 				}
 				return nil, fmt.Errorf(
 					"index range: %w",
@@ -171,7 +171,7 @@ func (e *Executor) executeExpr(
 			posting, err := e.indexes.Range(ex.Field, left, nil)
 			if err != nil {
 				if errors.Is(err, common.ErrRecordNotFound) {
-					return &structs.PostingList{}, nil
+					return slices.Values([]domain.RecordID{}), nil
 				}
 				return nil, fmt.Errorf(
 					"index range: %w",
