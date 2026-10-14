@@ -1,6 +1,7 @@
-package query
+package execution
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -9,12 +10,12 @@ import (
 	"fishyAHP/LogParser.git/internal/core/domain"
 )
 
-type SemanticAnalyzer struct {
+type semanticAnalyzer struct {
 	scheme *domain.Scheme
 }
 
-func NewSemanticAnalyzer(scheme *domain.Scheme) *SemanticAnalyzer {
-	return &SemanticAnalyzer{
+func newSemanticAnalyzer(scheme *domain.Scheme) *semanticAnalyzer {
+	return &semanticAnalyzer{
 		scheme: scheme,
 	}
 }
@@ -39,10 +40,10 @@ func (t *TypedCondition) isTypedExpr()  {}
 func (t *TypedBinaryExpr) isTypedExpr() {}
 
 type TypedQuery struct {
-	Fields     []string
+	Fields     []SelectExpr
 	Expression TypedExpr
 	Limit      *uint64
-	Counting   bool
+	Offset     *uint64
 }
 
 func allowedOperators(typ domain.IndexType) CompareOperator {
@@ -60,12 +61,12 @@ func isAllowed(allowed, op CompareOperator) bool {
 	return allowed&op != 0
 }
 
-func (s *SemanticAnalyzer) Analyze(
-	query Query,
+func (s *semanticAnalyzer) analyze(
+	query query,
 	catalog *domain.FieldsCatalog,
 ) (TypedQuery, error) {
 	if err := s.analyzeFields(
-		query.Fields,
+		query.Projection,
 		catalog,
 	); err != nil {
 		return TypedQuery{}, fmt.Errorf(
@@ -82,49 +83,69 @@ func (s *SemanticAnalyzer) Analyze(
 		)
 	}
 
-	fields := query.Fields
-
+	fields := query.Projection
 	if len(fields) == 0 {
-		fields = []string{"*"}
+		fields = []SelectExpr{SelectWildCard{}}
 	}
 
 	return TypedQuery{
 		Fields:     fields,
 		Expression: typed,
 		Limit:      query.Limit,
-		Counting:   query.Counting,
+		Offset:     query.Offset,
 	}, nil
 }
 
-func (s *SemanticAnalyzer) analyzeFields(
-	fields []string,
+func (s *semanticAnalyzer) analyzeFields(
+	fields []SelectExpr,
 	catalog *domain.FieldsCatalog,
 ) error {
-	for _, field := range fields {
-		if field == "*" {
+	for i, field := range fields {
+		switch expr := field.(type) {
+		case SelectWildCard:
+			if len(fields) != 1 {
+				return errors.New(
+					"wildcard cannot be mixed with other fields",
+				)
+			}
 			return nil
-		}
 
-		if slices.ContainsFunc(
-			s.scheme.Parameters,
-			func(f domain.Field) bool {
-				return f.Name == field
-			}) {
-			continue
-		}
+		case SelectedField:
+			name := string(expr)
 
-		if !catalog.Has(field) {
-			return fmt.Errorf(
-				"undefined field: %q",
-				field,
-			)
+			if slices.ContainsFunc(
+				s.scheme.Parameters,
+				func(f domain.Field) bool {
+					return f.Name == name
+				}) {
+				continue
+			}
+
+			if !catalog.Has(name) {
+				return fmt.Errorf(
+					"undefined field: %q",
+					field,
+				)
+			}
+
+		case SelectAggregate:
+			// TODO: when will add other aggregate func need change this case
+			if expr.Func != Count {
+				return errors.New("not supported option")
+			}
+			if expr.Field != "*" {
+				return errors.New("not supported option")
+			}
+			if i != 0 {
+				return errors.New("not support option")
+			}
 		}
 	}
 
 	return nil
 }
 
-func (s *SemanticAnalyzer) analyzeExpression(
+func (s *semanticAnalyzer) analyzeExpression(
 	expr Expr,
 ) (TypedExpr, error) {
 	if expr == nil {
@@ -199,7 +220,7 @@ func (s *SemanticAnalyzer) analyzeExpression(
 	)
 }
 
-func parseValue(field domain.DataType, lexeme Lexeme) (domain.Value, error) {
+func parseValue(field domain.DataType, lexeme lexeme) (domain.Value, error) {
 	switch field {
 	case domain.StringType:
 		if lexeme.Type != String {

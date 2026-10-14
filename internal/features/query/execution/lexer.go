@@ -1,4 +1,4 @@
-package query
+package execution
 
 import (
 	"errors"
@@ -7,22 +7,23 @@ import (
 	"unicode"
 )
 
-type Lexer struct {
-	keywords  map[string]LexemeType
-	operators map[string]LexemeType
+type lexer struct {
+	keywords  map[string]lexemeType
+	operators map[string]lexemeType
 }
 
-func NewLexer() *Lexer {
-	return &Lexer{
-		keywords: map[string]LexemeType{
+func newLexer() *lexer {
+	return &lexer{
+		keywords: map[string]lexemeType{
 			"and":    AndType,
 			"or":     OrType,
 			"select": SelectType,
 			"where":  WhereType,
 			"limit":  LimitType,
+			"offset": OffsetType,
 			"count":  CountType,
 		},
-		operators: map[string]LexemeType{
+		operators: map[string]lexemeType{
 			"=":  EqualType,
 			">":  BiggerType,
 			">=": BiggerOrEqualType,
@@ -32,16 +33,16 @@ func NewLexer() *Lexer {
 	}
 }
 
-type Lexeme struct {
-	Type    LexemeType
+type lexeme struct {
+	Type    lexemeType
 	Literal string
 }
 
-type LexemeType uint8
+type lexemeType uint8
 
 const (
 	// Identifier String and Number are lexic string
-	Identifier LexemeType = iota
+	Identifier lexemeType = iota
 	String
 	Number
 	Bool
@@ -67,17 +68,18 @@ const (
 	CommaType
 	AsteriskType
 	LimitType
+	OffsetType
 	CountType
 
 	// EOF - end of file or string
 	EOF
 )
 
-var EOFLexeme = Lexeme{
+var EOFLexeme = lexeme{
 	Type: EOF,
 }
 
-func (t LexemeType) String() string {
+func (t lexemeType) String() string {
 	switch t {
 	case Identifier:
 		return "identifier"
@@ -115,6 +117,8 @@ func (t LexemeType) String() string {
 		return ","
 	case LimitType:
 		return "LIMIT"
+	case OffsetType:
+		return "OFFSET"
 	case CountType:
 		return "COUNT"
 	case EOF:
@@ -124,9 +128,9 @@ func (t LexemeType) String() string {
 	}
 }
 
-func (l *Lexer) Parse(input string) ([]Lexeme, error) {
+func (l *lexer) parse(input string) ([]lexeme, error) {
 	runes := []rune(strings.TrimSpace(input))
-	res := make([]Lexeme, 0, len(runes))
+	res := make([]lexeme, 0, len(runes))
 
 	var builder strings.Builder
 	flush := func() {
@@ -146,36 +150,36 @@ func (l *Lexer) Parse(input string) ([]Lexeme, error) {
 			continue
 		}
 
-		lexeme := Lexeme{}
+		lex := lexeme{}
 		switch runes[i] {
 		case '<', '>':
 			op := runes[i]
 			flush()
 
-			lexeme.Type = l.operators[string(op)]
-			lexeme.Literal = string(op)
+			lex.Type = l.operators[string(op)]
+			lex.Literal = string(op)
 			if i+1 < len(runes) &&
 				runes[i+1] == '=' {
 				newOp := string(op) + string('=')
-				lexeme.Type = l.operators[newOp]
-				lexeme.Literal = newOp
+				lex.Type = l.operators[newOp]
+				lex.Literal = newOp
 				i++
 			}
 		case '=':
 			flush()
 
-			lexeme.Type = l.operators["="]
-			lexeme.Literal = "="
+			lex.Type = l.operators["="]
+			lex.Literal = "="
 		case '(':
 			flush()
 
-			lexeme.Type = LeftParen
-			lexeme.Literal = "("
+			lex.Type = LeftParen
+			lex.Literal = "("
 		case ')':
 			flush()
 
-			lexeme.Type = RightParen
-			lexeme.Literal = ")"
+			lex.Type = RightParen
+			lex.Literal = ")"
 		case '"', '\'':
 			flush()
 
@@ -194,25 +198,25 @@ func (l *Lexer) Parse(input string) ([]Lexeme, error) {
 			}
 			i = j
 
-			lexeme.Type = String
-			lexeme.Literal = builder.String()
+			lex.Type = String
+			lex.Literal = builder.String()
 		case '*':
 			flush()
 
-			lexeme.Type = AsteriskType
-			lexeme.Literal = "*"
+			lex.Type = AsteriskType
+			lex.Literal = "*"
 		case ',':
 			flush()
 
-			lexeme.Type = CommaType
-			lexeme.Literal = ","
+			lex.Type = CommaType
+			lex.Literal = ","
 		default:
 			builder.WriteRune(runes[i])
 			continue
 		}
 
 		builder.Reset()
-		res = append(res, lexeme)
+		res = append(res, lex)
 	}
 
 	flush()
@@ -221,20 +225,20 @@ func (l *Lexer) Parse(input string) ([]Lexeme, error) {
 	return res, nil
 }
 
-func (l *Lexer) toLexeme(s string) Lexeme {
-	var lexeme Lexeme
+func (l *lexer) toLexeme(s string) lexeme {
+	var lex lexeme
 
 	typ, ok := l.keywords[strings.ToLower(s)]
 	if ok {
-		lexeme.Type = typ
+		lex.Type = typ
 	} else if _, err := strconv.ParseFloat(s, 64); err == nil {
-		lexeme.Type = Number
+		lex.Type = Number
 	} else if _, err = strconv.ParseBool(s); err == nil {
-		lexeme.Type = Bool
+		lex.Type = Bool
 	} else {
-		lexeme.Type = Identifier
+		lex.Type = Identifier
 	}
 
-	lexeme.Literal = s
-	return lexeme
+	lex.Literal = s
+	return lex
 }

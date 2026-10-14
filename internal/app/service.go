@@ -3,7 +3,6 @@ package app
 import (
 	"bufio"
 	"bytes"
-	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"io"
@@ -12,14 +11,15 @@ import (
 	"fishyAHP/LogParser.git/internal/features/index"
 	"fishyAHP/LogParser.git/internal/features/parse"
 	"fishyAHP/LogParser.git/internal/features/query"
+	"fishyAHP/LogParser.git/internal/features/query/iterators"
 	"fishyAHP/LogParser.git/internal/features/storage"
 )
 
 type Service struct {
-	index    *index.Manager
-	executor *query.Executor
-	parser   *parse.LogParser
-	store    *storage.Storage
+	index  *index.Manager
+	engine *query.Engine
+	parser *parse.LogParser
+	store  *storage.Storage
 
 	catalog *domain.FieldsCatalog
 }
@@ -67,15 +67,28 @@ func newService(
 		)
 	}
 
-	executor := query.NewExecutor(idx, catalog)
 	parser := parse.NewParser(scheme, format)
 
+	engine, err := query.NewEngine(
+		store,
+		parser,
+		idx,
+		catalog,
+	)
+	if err != nil {
+		_ = store.Close()
+		return nil, fmt.Errorf(
+			"new query engine: %w",
+			err,
+		)
+	}
+
 	service := &Service{
-		parser:   parser,
-		store:    store,
-		index:    idx,
-		executor: executor,
-		catalog:  catalog,
+		parser:  parser,
+		store:   store,
+		index:   idx,
+		engine:  engine,
+		catalog: catalog,
 	}
 
 	if err = service.rebuildMetadata(); err != nil {
@@ -189,8 +202,8 @@ func (s *Service) IngestReader(reader io.Reader) error {
 	return nil
 }
 
-func (s *Service) Query(q string) ([][]byte, error) {
-	result, err := s.executor.Execute(q)
+func (s *Service) Query(q string) (iterators.Rows, error) {
+	rows, err := s.engine.Query(q)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"executing raw: %w",
@@ -198,117 +211,7 @@ func (s *Service) Query(q string) ([][]byte, error) {
 		)
 	}
 
-	if result.Counting {
-		count := s.store.RecordsCount()
-
-		if !result.FullScan {
-			count = uint64(result.Posting.Len())
-		}
-
-		return [][]byte{
-			[]byte(fmt.Sprintf(`{"COUNT(*)":%d}`, count)),
-		}, nil
-	}
-
-	limit := s.store.RecordsCount()
-	if result.Limit != nil {
-		limit = *result.Limit
-	}
-
-	if limit == 0 {
-		return nil, nil
-	}
-
-	res := make([][]byte, 0, limit)
-	if result.FullScan {
-		iterator := s.store.Iterator()
-
-		for limit > 0 &&
-			iterator.Next() {
-			data, err := s.project(iterator.Data(), result.Fields)
-			if err != nil {
-				return nil, fmt.Errorf(
-					"full scan projection: %w",
-					err,
-				)
-			}
-
-			if len(result.Fields) == 0 ||
-				(len(result.Fields) == 1 && result.Fields[0] == "*") {
-				data = bytes.Clone(data)
-			}
-
-			limit--
-			res = append(res, data)
-		}
-
-		if err = iterator.Err(); err != nil {
-			return nil, fmt.Errorf(
-				"storage iterator: %w",
-				err,
-			)
-		}
-		return res, nil
-	}
-
-	sl := result.Posting.Slice()
-	for _, record := range sl {
-		if limit == 0 {
-			break
-		}
-
-		data, err := s.store.ReadByID(record)
-		if err != nil {
-			if errors.Is(err, storage.ErrRecordNotFound) {
-				continue
-			}
-			return nil, fmt.Errorf(
-				"read record %v: %w",
-				record,
-				err,
-			)
-		}
-
-		data, err = s.project(data, result.Fields)
-		if err != nil {
-			return nil, fmt.Errorf(
-				"with index projection: %w",
-				err,
-			)
-		}
-
-		limit--
-		res = append(res, data)
-	}
-	return res, nil
-}
-
-func (s *Service) project(
-	data []byte,
-	fields []string,
-) ([]byte, error) {
-	if len(fields) == 0 ||
-		(len(fields) == 1 && fields[0] == "*") {
-		return data, nil
-	}
-
-	projections, err := s.parser.Project(data, fields)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"parser project: %w",
-			err,
-		)
-	}
-
-	res, err := json.Marshal(projections)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"json marshal: %w",
-			err,
-		)
-	}
-
-	return res, nil
+	return rows, nil
 }
 
 func (s *Service) Close() error {

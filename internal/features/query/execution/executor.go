@@ -1,4 +1,4 @@
-package query
+package execution
 
 import (
 	"errors"
@@ -14,38 +14,50 @@ type Executor struct {
 	indexes *index.Manager
 	catalog *domain.FieldsCatalog
 
-	syntax   *Syntaxes
-	semantic *SemanticAnalyzer
+	lexer    *lexer
+	semantic *semanticAnalyzer
 }
 
 func NewExecutor(
 	indexes *index.Manager,
 	catalog *domain.FieldsCatalog,
-) *Executor {
+) (*Executor, error) {
+	if indexes == nil {
+		return nil, errors.New(
+			"indexes mustn't be nil",
+		)
+	}
+
 	return &Executor{
 		indexes: indexes,
 		catalog: catalog,
-		syntax: NewSyntaxes(
-			NewLexer(),
-		),
-		semantic: NewSemanticAnalyzer(
+		lexer:   newLexer(),
+		semantic: newSemanticAnalyzer(
 			indexes.Scheme,
 		),
-	}
+	}, nil
 }
 
 type Result struct {
-	Fields   []string
-	Posting  *structs.PostingList
-	FullScan bool
-	Limit    *uint64
-	Counting bool
+	Fields  []SelectExpr
+	Posting *structs.PostingList
+	Limit   *uint64
+	Offset  *uint64
 }
 
 func (e *Executor) Execute(
 	s string,
 ) (Result, error) {
-	query, err := e.syntax.Query(s)
+	lexemes, err := e.lexer.parse(s)
+	if err != nil {
+		return Result{}, fmt.Errorf(
+			"lexer parse: %w",
+			err,
+		)
+	}
+	syntax := newSyntaxes(lexemes)
+
+	query, err := syntax.query()
 	if err != nil {
 		return Result{}, fmt.Errorf(
 			"syntax query: %w",
@@ -53,7 +65,7 @@ func (e *Executor) Execute(
 		)
 	}
 
-	typed, err := e.semantic.Analyze(query, e.catalog)
+	typed, err := e.semantic.analyze(query, e.catalog)
 	if err != nil {
 		return Result{}, fmt.Errorf(
 			"semantic analyze: %w",
@@ -62,18 +74,16 @@ func (e *Executor) Execute(
 	}
 
 	if typed.Expression == nil {
-		if len(typed.Fields) == 0 &&
-			!typed.Counting {
+		if len(typed.Fields) == 0 {
 			return Result{}, errors.New(
 				"empty typed expression",
 			)
 		}
 
 		return Result{
-			Fields:   typed.Fields,
-			FullScan: true,
-			Limit:    typed.Limit,
-			Counting: typed.Counting,
+			Fields: typed.Fields,
+			Limit:  typed.Limit,
+			Offset: typed.Offset,
 		}, nil
 	}
 
@@ -85,10 +95,10 @@ func (e *Executor) Execute(
 		)
 	}
 	return Result{
-		Posting:  res,
-		Fields:   typed.Fields,
-		Limit:    typed.Limit,
-		Counting: typed.Counting,
+		Posting: res,
+		Fields:  typed.Fields,
+		Limit:   typed.Limit,
+		Offset:  typed.Offset,
 	}, nil
 }
 

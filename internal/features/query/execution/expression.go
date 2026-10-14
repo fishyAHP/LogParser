@@ -1,4 +1,4 @@
-package query
+package execution
 
 type Expr interface {
 	IsExpr()
@@ -13,7 +13,7 @@ type BinaryExpr struct {
 type Condition struct {
 	Field    string
 	Operator CompareOperator
-	Value    Lexeme
+	Value    lexeme
 }
 
 type LogicalOperator uint8
