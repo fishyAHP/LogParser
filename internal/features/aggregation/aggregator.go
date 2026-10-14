@@ -29,7 +29,7 @@ func (a *Aggregator) GroupBy(
 		)
 	}
 
-	res, err := grouper.Group(postings)
+	res, err := grouper.Group(postings.Iterator())
 	if err != nil {
 		return nil, fmt.Errorf(
 			"group postings: %w",
@@ -63,7 +63,7 @@ func (a *Aggregator) CountBy(
 	for _, group := range groups {
 		stats = append(stats, CountStat{
 			Value: group.Value,
-			Count: group.Records.Len(),
+			Count: group.Records,
 		})
 	}
 

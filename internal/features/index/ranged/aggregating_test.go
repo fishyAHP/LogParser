@@ -2,6 +2,7 @@ package ranged
 
 import (
 	"errors"
+	"iter"
 	"math"
 	"testing"
 	"time"
@@ -81,12 +82,12 @@ func TestSumAvg(t *testing.T) {
 				posting.Add(id)
 			}
 
-			sum, err := idx.Sum(posting)
+			sum, err := idx.Sum(posting.Iterator())
 			if err != nil {
 				t.Fatalf("Sum: %v", err)
 			}
 
-			avg, err := idx.Avg(posting)
+			avg, err := idx.Avg(posting.Iterator())
 			if err != nil {
 				t.Fatalf("Avg: %v", err)
 			}
@@ -136,12 +137,12 @@ func TestSumAvgFloat(t *testing.T) {
 		posting.Add(id)
 	}
 
-	sum, err := idx.Sum(posting)
+	sum, err := idx.Sum(posting.Iterator())
 	if err != nil {
 		t.Fatalf("Sum: %v", err)
 	}
 
-	avg, err := idx.Avg(posting)
+	avg, err := idx.Avg(posting.Iterator())
 	if err != nil {
 		t.Fatalf("Avg: %v", err)
 	}
@@ -209,12 +210,12 @@ func TestMinMax(t *testing.T) {
 				posting.Add(id)
 			}
 
-			minValue, err := idx.Min(posting)
+			minValue, err := idx.Min(posting.Iterator())
 			if err != nil {
 				t.Fatalf("Min: %v", err)
 			}
 
-			maxValue, err := idx.Max(posting)
+			maxValue, err := idx.Max(posting.Iterator())
 			if err != nil {
 				t.Fatalf("Max: %v", err)
 			}
@@ -248,7 +249,7 @@ func TestAggregationEmpty(t *testing.T) {
 
 	tests := []struct {
 		name string
-		fn   func(*structs.PostingList) (domain.Value, error)
+		fn   func(seq iter.Seq[domain.RecordID]) (domain.Value, error)
 	}{
 		{"Sum", idx.Sum},
 		{"Avg", idx.Avg},
@@ -260,7 +261,7 @@ func TestAggregationEmpty(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			posting := structs.NewPostingLists(0)
 
-			_, err := tt.fn(posting)
+			_, err := tt.fn(posting.Iterator())
 
 			if !errors.Is(err, common.ErrRecordNotFound) {
 				t.Errorf(
@@ -288,7 +289,7 @@ func TestAggregationUnsupportedType(t *testing.T) {
 
 	tests := []struct {
 		name string
-		fn   func(*structs.PostingList) (domain.Value, error)
+		fn   func(seq iter.Seq[domain.RecordID]) (domain.Value, error)
 	}{
 		{"Sum", idx.Sum},
 		{"Avg", idx.Avg},
@@ -296,7 +297,7 @@ func TestAggregationUnsupportedType(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := tt.fn(posting)
+			_, err := tt.fn(posting.Iterator())
 
 			if !errors.Is(err, common.ErrUnsupportedType) {
 				t.Errorf(

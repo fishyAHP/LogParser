@@ -1,6 +1,7 @@
 package structs
 
 import (
+	"iter"
 	"slices"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
@@ -73,4 +74,14 @@ func (p *PostingList) Len() int {
 
 func (p *PostingList) Slice() []domain.RecordID {
 	return slices.Clone(p.posting)
+}
+
+func (p *PostingList) Iterator() iter.Seq[domain.RecordID] {
+	return func(yield func(domain.RecordID) bool) {
+		for _, id := range p.posting {
+			if !yield(id) {
+				return
+			}
+		}
+	}
 }

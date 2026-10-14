@@ -1,6 +1,7 @@
 package text
 
 import (
+	"iter"
 	"slices"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
@@ -25,7 +26,7 @@ func New() *Index {
 
 func (i *Index) Search(
 	value domain.Value,
-) (*structs.PostingList, error) {
+) (iter.Seq[domain.RecordID], error) {
 	strVal, ok := value.(domain.StringValue)
 	if !ok {
 		return nil, common.ErrInvalidType
@@ -35,7 +36,7 @@ func (i *Index) Search(
 	if res == nil {
 		return nil, common.ErrRecordNotFound
 	}
-	return res, nil
+	return res.Iterator(), nil
 }
 
 func (i *Index) Add(

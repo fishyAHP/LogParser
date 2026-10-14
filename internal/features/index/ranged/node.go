@@ -1,6 +1,8 @@
 package ranged
 
 import (
+	"iter"
+
 	"fishyAHP/LogParser.git/internal/core/domain"
 	"fishyAHP/LogParser.git/internal/features/index/structs"
 )
@@ -55,9 +57,13 @@ func newRecs(id domain.RecordID) *records {
 	}
 }
 
+func (r *records) isEmpty() bool {
+	return r.single == 0 &&
+		r.many == nil
+}
+
 func (r *records) add(id domain.RecordID) bool {
-	if r.single == 0 &&
-		r.many == nil {
+	if r.isEmpty() {
 		r.single = id
 		return true
 	}
@@ -72,8 +78,7 @@ func (r *records) add(id domain.RecordID) bool {
 }
 
 func (r *records) count() int {
-	if r.single == 0 &&
-		r.many == nil {
+	if r.isEmpty() {
 		return 0
 	}
 
@@ -84,8 +89,7 @@ func (r *records) count() int {
 }
 
 func (r *records) toPosting() *structs.PostingList {
-	if r.single == 0 &&
-		r.many == nil {
+	if r.isEmpty() {
 		return &structs.PostingList{}
 	}
 
@@ -99,8 +103,7 @@ func (r *records) toPosting() *structs.PostingList {
 }
 
 func (r *records) slice() []domain.RecordID {
-	if r.single == 0 &&
-		r.many == nil {
+	if r.isEmpty() {
 		return nil
 	}
 
@@ -111,8 +114,7 @@ func (r *records) slice() []domain.RecordID {
 }
 
 func (r *records) contains(id domain.RecordID) bool {
-	if r.single == 0 &&
-		r.many == nil {
+	if r.isEmpty() {
 		return false
 	}
 
@@ -120,4 +122,22 @@ func (r *records) contains(id domain.RecordID) bool {
 		return r.single == id
 	}
 	return r.many.Contains(id)
+}
+
+func (r *records) iterator() iter.Seq[domain.RecordID] {
+	return func(yield func(domain.RecordID) bool) {
+		if r.isEmpty() {
+			return
+		}
+
+		if r.many == nil {
+			yield(r.single)
+			return
+		}
+		for id := range r.many.Iterator() {
+			if !yield(id) {
+				return
+			}
+		}
+	}
 }

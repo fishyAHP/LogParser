@@ -1,6 +1,7 @@
 package hash
 
 import (
+	"iter"
 	"sync"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
@@ -23,7 +24,7 @@ func New[K common.Key]() *Index[K] {
 
 func (i *Index[K]) Exact(
 	value domain.Value,
-) (*structs.PostingList, error) {
+) (iter.Seq[domain.RecordID], error) {
 	i.mtx.RLock()
 	defer i.mtx.RUnlock()
 
@@ -36,7 +37,7 @@ func (i *Index[K]) Exact(
 		return nil, common.ErrRecordNotFound
 	}
 
-	return s, nil
+	return s.Iterator(), nil
 }
 
 func (i *Index[K]) Add(
@@ -111,7 +112,7 @@ func (i *Index[K]) Group(
 		if res.Len() > 0 {
 			groups = append(groups, common.Group{
 				Value:   k,
-				Records: res,
+				Records: res.Iterator(),
 			})
 		}
 	}

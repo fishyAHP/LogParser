@@ -2,6 +2,7 @@ package ranged
 
 import (
 	"errors"
+	"iter"
 	"math"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
@@ -198,7 +199,9 @@ func (t *rbTree[K]) rightRotate(n *node[K]) {
 // because if it will return domain.RecordID, it changes
 // from O(log n) to O(n). Also this func return bool which means
 // if true, it founded key, another not yet.
-func (t *rbTree[K]) find(key K) (*structs.PostingList, bool) {
+func (t *rbTree[K]) find(
+	key K,
+) (iter.Seq[domain.RecordID], bool) {
 	cur := t.root
 
 	for cur != nil {
@@ -212,7 +215,7 @@ func (t *rbTree[K]) find(key K) (*structs.PostingList, bool) {
 		default:
 			return cur.
 				records.
-				toPosting(), true
+				iterator(), true
 		}
 	}
 
@@ -378,6 +381,10 @@ func (t *rbTree[K]) forEach(
 		value domain.Value,
 		count int,
 	) bool) {
+	if t.root == nil {
+		return
+	}
+
 	queue := append(
 		make([]*node[K], 0, t.height()),
 		t.root,
@@ -392,8 +399,10 @@ func (t *rbTree[K]) forEach(
 			posting,
 		)
 
-		if !visit(front.key, matches) {
-			return
+		if matches > 0 {
+			if !visit(front.key, matches) {
+				return
+			}
 		}
 
 		if front.left != nil {

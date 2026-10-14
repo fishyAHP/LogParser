@@ -2,6 +2,7 @@ package ranged
 
 import (
 	"fmt"
+	"iter"
 	"slices"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
@@ -27,7 +28,7 @@ type localBound[K common.Key] struct {
 
 func (i *Index[K]) Range(
 	from, to *common.Bound,
-) (*structs.PostingList, error) {
+) (iter.Seq[domain.RecordID], error) {
 	var (
 		fromBound *localBound[K]
 		toBound   *localBound[K]
@@ -60,22 +61,22 @@ func (i *Index[K]) Range(
 	}
 
 	slices.Sort(res)
-	return structs.NewPostingFromSorted(res), nil
+	return slices.Values(res), nil
 }
 
 func (i *Index[K]) Exact(
 	value domain.Value,
-) (*structs.PostingList, error) {
+) (iter.Seq[domain.RecordID], error) {
 	key, ok := value.(K)
 	if !ok {
 		return nil, common.ErrInvalidType
 	}
 
-	res, ok := i.tree.find(key)
+	iterator, ok := i.tree.find(key)
 	if !ok {
 		return nil, common.ErrRecordNotFound
 	}
-	return res, nil
+	return iterator, nil
 }
 
 func (i *Index[K]) Add(
@@ -105,34 +106,24 @@ func (i *Index[K]) Remove(
 	return nil
 }
 
-func (i *Index[K]) minNode() *node[K] {
-	if i.tree.len() == 0 {
+func (i *Index[K]) minNode() iter.Seq[domain.RecordID] {
+	if i.tree.root == nil {
 		return nil
 	}
-	if i.tree.len() == 1 {
-		return i.tree.root
-	}
 
-	minNode := i.tree.min()
-
-	return minNode
+	return i.tree.min().
+		records.
+		iterator()
 }
 
-func (i *Index[K]) maxNode() *structs.PostingList {
-	if i.tree.len() == 0 {
+func (i *Index[K]) maxNode() iter.Seq[domain.RecordID] {
+	if i.tree.root == nil {
 		return nil
 	}
-	if i.tree.len() == 1 {
-		return i.tree.root.
-			records.
-			toPosting()
-	}
 
-	maxNode := i.tree.max()
-
-	return maxNode.
+	return i.tree.max().
 		records.
-		toPosting()
+		iterator()
 }
 
 func (i *Index[K]) Len() int {
@@ -144,27 +135,27 @@ func (i *Index[K]) Clear() {
 }
 
 func (i *Index[K]) Min(
-	posting *structs.PostingList,
+	source iter.Seq[domain.RecordID],
 ) (domain.Value, error) {
 	return i.tree.extremum(
-		posting,
+		toPosting(source),
 		ascending,
 	)
 }
 
 func (i *Index[K]) Max(
-	posting *structs.PostingList,
+	source iter.Seq[domain.RecordID],
 ) (domain.Value, error) {
 	return i.tree.extremum(
-		posting,
+		toPosting(source),
 		descending,
 	)
 }
 
 func (i *Index[K]) Avg(
-	posting *structs.PostingList,
+	source iter.Seq[domain.RecordID],
 ) (domain.Value, error) {
-	sum, count, err := i.sumAndCount(posting)
+	sum, count, err := i.sumAndCount(source)
 	if err != nil {
 		return nil, err
 	}
@@ -173,9 +164,9 @@ func (i *Index[K]) Avg(
 }
 
 func (i *Index[K]) Sum(
-	posting *structs.PostingList,
+	source iter.Seq[domain.RecordID],
 ) (domain.Value, error) {
-	sum, _, err := i.sumAndCount(posting)
+	sum, _, err := i.sumAndCount(source)
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +174,7 @@ func (i *Index[K]) Sum(
 }
 
 func (i *Index[K]) sumAndCount(
-	posting *structs.PostingList,
+	source iter.Seq[domain.RecordID],
 ) (domain.FloatValue, int, error) {
 	var (
 		count int
@@ -191,29 +182,31 @@ func (i *Index[K]) sumAndCount(
 		err   error
 	)
 
-	i.tree.forEach(posting, func(
-		value domain.Value,
-		length int,
-	) bool {
+	i.tree.forEach(
+		toPosting(source),
+		func(
+			value domain.Value,
+			length int,
+		) bool {
 
-		switch v := value.(type) {
-		case domain.FloatValue:
-			count += length
-			sum += domain.FloatValue(length) * v
-		case domain.IntValue:
-			count += length
-			sum += domain.FloatValue(length) * domain.FloatValue(v)
-		default:
-			err = fmt.Errorf(
-				"aggregate value %T: %w",
-				v,
-				common.ErrUnsupportedType,
-			)
-			return false
-		}
+			switch v := value.(type) {
+			case domain.FloatValue:
+				count += length
+				sum += domain.FloatValue(length) * v
+			case domain.IntValue:
+				count += length
+				sum += domain.FloatValue(length) * domain.FloatValue(v)
+			default:
+				err = fmt.Errorf(
+					"aggregate value %T: %w",
+					v,
+					common.ErrUnsupportedType,
+				)
+				return false
+			}
 
-		return count < posting.Len()
-	})
+			return true
+		})
 
 	if err != nil {
 		return 0, 0, err
@@ -223,4 +216,16 @@ func (i *Index[K]) sumAndCount(
 		return 0, 0, common.ErrRecordNotFound
 	}
 	return sum, count, nil
+}
+
+func toPosting(
+	source iter.Seq[domain.RecordID],
+) *structs.PostingList {
+	post := structs.NewPostingLists(0)
+
+	for id := range source {
+		post.Add(id)
+	}
+
+	return post
 }

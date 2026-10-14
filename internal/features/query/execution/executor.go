@@ -3,6 +3,7 @@ package execution
 import (
 	"errors"
 	"fmt"
+	"iter"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
 	"fishyAHP/LogParser.git/internal/features/index"
@@ -40,7 +41,7 @@ func NewExecutor(
 
 type Result struct {
 	Fields  []SelectExpr
-	Posting *structs.PostingList
+	Posting iter.Seq[domain.RecordID]
 	Limit   *uint64
 	Offset  *uint64
 }
@@ -104,7 +105,7 @@ func (e *Executor) Execute(
 
 func (e *Executor) executeExpr(
 	typedExpr TypedExpr,
-) (*structs.PostingList, error) {
+) (iter.Seq[domain.RecordID], error) {
 	switch ex := typedExpr.(type) {
 	case *TypedBinaryExpr:
 		left, err := e.executeExpr(ex.Left)
@@ -136,7 +137,7 @@ func (e *Executor) executeExpr(
 			res, err := e.indexes.Exact(ex.Field, ex.Value)
 			if err != nil {
 				if errors.Is(err, common.ErrRecordNotFound) {
-					return &structs.PostingList{}, nil
+					return nil, nil
 				}
 				return nil, fmt.Errorf(
 					"indexes exact: %w",
