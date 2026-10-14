@@ -21,9 +21,10 @@ func Scan(
 	return func(yield func([]byte, error) bool) {
 		if posting == nil {
 			iterator := store.Iterator()
+			defer iterator.Close()
 
 			for iterator.Next() {
-				if !yield(iterator.Data(), nil) {
+				if !yield(bytes.Clone(iterator.Data()), nil) {
 					return
 				}
 			}
@@ -137,18 +138,7 @@ func Project(
 ) Rows {
 	if len(fields) == 0 ||
 		(len(fields) == 1 && fields[0] == "*") {
-		return func(yield func([]byte, error) bool) {
-			for data, err := range source {
-				if err != nil {
-					yield(nil, err)
-					return
-				}
-
-				if !yield(bytes.Clone(data), nil) {
-					return
-				}
-			}
-		}
+		return source
 	}
 
 	return func(yield func([]byte, error) bool) {

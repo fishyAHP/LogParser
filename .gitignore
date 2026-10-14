@@ -2,3 +2,7 @@ logs_1m.jsonl
 .storage/
 .idea/
 .DS_Store
+heap.pprof
+limit_heap.pprof
+old_heap.pprof
+query_heap.pprof
