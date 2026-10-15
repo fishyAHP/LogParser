@@ -85,3 +85,11 @@ func (p *PostingList) Iterator() iter.Seq[domain.RecordID] {
 		}
 	}
 }
+
+func (p *PostingList) At(idx int) domain.RecordID {
+	if idx > len(p.posting) ||
+		idx < 0 {
+		return 0
+	}
+	return p.posting[idx]
+}

@@ -1,71 +1,101 @@
 package ranged
 
 import (
-	"container/heap"
 	"iter"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
 )
 
-var _ heap.Interface = (*mergeHeap)(nil)
-
-type mergeHeap []mergeItem
-
-type mergeItem struct {
-	id   domain.RecordID
-	next func() (domain.RecordID, bool)
+type heapItem struct {
+	id      domain.RecordID
+	records *records
+	pos     int
 }
 
-func (m mergeHeap) Len() int {
-	return len(m)
+type mergeHeap []heapItem
+
+func (m *mergeHeap) Swap(i, j int) {
+	(*m)[i], (*m)[j] = (*m)[j], (*m)[i]
 }
 
-func (m mergeHeap) Less(i, j int) bool {
-	return m[i].id < m[j].id
+func (m *mergeHeap) push(item heapItem) {
+	*m = append(*m, item)
+
+	child := len(*m) - 1
+
+	for child > 0 {
+		parent := (child - 1) / 2
+
+		if (*m)[parent].id <= (*m)[child].id {
+			break
+		}
+		m.Swap(parent, child)
+		child = parent
+	}
+
 }
 
-func (m mergeHeap) Swap(i, j int) {
-	m[i], m[j] = m[j], m[i]
-}
-
-func (m *mergeHeap) Push(item any) {
-	*m = append(*m, item.(mergeItem))
-}
-
-func (m *mergeHeap) Pop() any {
+func (m *mergeHeap) pop() heapItem {
 	old := *m
-	n := len(old)
+	lowest := old[0]
 
-	item := old[n-1]
-	*m = old[:n-1]
+	if len(old) == 1 {
+		old[0] = heapItem{}
+		*m = old[:0]
+		return lowest
+	}
+	last := len(old) - 1
+	old[0] = old[last]
+	old[last] = heapItem{}
+	old = old[:last]
 
-	return item
+	pos := 0
+
+	for {
+		left := 2*pos + 1
+		right := 2*pos + 2
+
+		if left >= len(old) {
+			break
+		}
+
+		smallest := left
+
+		if right < len(old) &&
+			old[right].id < old[left].id {
+			smallest = right
+		}
+
+		if old[pos].id <= old[smallest].id {
+			break
+		}
+
+		old.Swap(pos, smallest)
+		pos = smallest
+	}
+
+	*m = old
+	return lowest
+}
+
+func (m *mergeHeap) len() int {
+	return len(*m)
 }
 
 func merge(
-	sources iter.Seq[iter.Seq[domain.RecordID]],
+	sources iter.Seq[*records],
 ) iter.Seq[domain.RecordID] {
 	return func(yield func(domain.RecordID) bool) {
 		h := make(mergeHeap, 0)
 
-		var stops []func()
-		defer func() {
-			for _, stop := range stops {
-				stop()
-			}
-		}()
-
 		for source := range sources {
-			next, stop := iter.Pull(source)
-			stops = append(stops, stop)
-
-			id, ok := next()
-			if !ok {
+			if source.count() == 0 {
 				continue
 			}
-			heap.Push(&h, mergeItem{
-				id:   id,
-				next: next,
+
+			h.push(heapItem{
+				id:      source.at(0),
+				records: source,
 			})
 		}
 
@@ -74,8 +104,8 @@ func merge(
 			hasLast bool
 		)
 
-		for h.Len() > 0 {
-			item := heap.Pop(&h).(mergeItem)
+		for h.len() > 0 {
+			item := h.pop()
 
 			if !hasLast ||
 				item.id != last {
@@ -87,10 +117,11 @@ func merge(
 				}
 			}
 
-			nextID, ok := item.next()
-			if ok {
-				item.id = nextID
-				heap.Push(&h, item)
+			item.pos++
+
+			if item.pos < item.records.count() {
+				item.id = item.records.at(item.pos)
+				h.push(item)
 			}
 		}
 	}

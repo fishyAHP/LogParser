@@ -88,6 +88,16 @@ func (r *records) count() int {
 	return r.many.Len()
 }
 
+func (r *records) at(idx int) domain.RecordID {
+	if r.isEmpty() {
+		return 0
+	}
+	if r.many == nil {
+		return r.single
+	}
+	return r.many.At(idx)
+}
+
 func (r *records) toPosting() *structs.PostingList {
 	if r.isEmpty() {
 		return &structs.PostingList{}

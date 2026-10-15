@@ -221,12 +221,14 @@ func (t *rbTree[K]) find(
 	return nil, false
 }
 
-func (t *rbTree[K]) innerRange(from, to *localBound[K]) iter.Seq[domain.RecordID] {
+func (t *rbTree[K]) innerRange(
+	from, to *localBound[K],
+) iter.Seq[domain.RecordID] {
 	sources := func(
-		yield func(seq iter.Seq[domain.RecordID]) bool,
+		yield func(rec *records) bool,
 	) {
 		for nod := range t.rangeSearch(t.root, from, to) {
-			if !yield(nod.records.iterator()) {
+			if !yield(nod.records) {
 				return
 			}
 		}
