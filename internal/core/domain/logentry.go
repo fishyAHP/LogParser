@@ -14,7 +14,7 @@ type LogEntry struct {
 }
 
 type Value interface {
-	isValue()
+	Type() DataType
 }
 
 type IntValue int64
@@ -23,8 +23,18 @@ type StringValue string
 type BoolValue bool
 type TimeValue time.Time
 
-func (i IntValue) isValue()    {}
-func (f FloatValue) isValue()  {}
-func (s StringValue) isValue() {}
-func (b BoolValue) isValue()   {}
-func (t TimeValue) isValue()   {}
+func (IntValue) Type() DataType {
+	return IntType
+}
+func (FloatValue) Type() DataType {
+	return FloatType
+}
+func (StringValue) Type() DataType {
+	return StringType
+}
+func (BoolValue) Type() DataType {
+	return BoolType
+}
+func (TimeValue) Type() DataType {
+	return TimeType
+}
