@@ -1,6 +1,7 @@
 package aggregation
 
 import (
+	"fmt"
 	"math"
 	"testing"
 	"time"
@@ -499,4 +500,169 @@ func almostEqual(a, b float64) bool {
 		absTol,
 		relTol*math.Max(math.Abs(a), math.Abs(b)),
 	)
+}
+
+func TestAvgAggregatorNegative(t *testing.T) {
+	cases := []struct {
+		name string
+		typ  domain.DataType
+		adds []domain.Value
+	}{
+		{
+			name: "float value in int aggregator",
+			typ:  domain.IntType,
+			adds: []domain.Value{
+				domain.FloatValue(10.5),
+			},
+		},
+		{
+			name: "int value in float aggregator",
+			typ:  domain.FloatType,
+			adds: []domain.Value{
+				domain.IntValue(10),
+			},
+		},
+		{
+			name: "time value in int aggregator",
+			typ:  domain.IntType,
+			adds: []domain.Value{
+				domain.TimeValue(time.Now()),
+			},
+		},
+		{
+			name: "time value in float aggregator",
+			typ:  domain.FloatType,
+			adds: []domain.Value{
+				domain.TimeValue(time.Now()),
+			},
+		},
+		{
+			name: "int value in time aggregator",
+			typ:  domain.TimeType,
+			adds: []domain.Value{
+				domain.IntValue(100),
+			},
+		},
+		{
+			name: "float value in time aggregator",
+			typ:  domain.TimeType,
+			adds: []domain.Value{
+				domain.FloatValue(100.5),
+			},
+		},
+		{
+			name: "string value",
+			typ:  domain.FloatType,
+			adds: []domain.Value{
+				domain.StringValue("100"),
+			},
+		},
+		{
+			name: "bool value",
+			typ:  domain.IntType,
+			adds: []domain.Value{
+				domain.BoolValue(true),
+			},
+		},
+		{
+			name: "nil value",
+			typ:  domain.TimeType,
+			adds: []domain.Value{
+				nil,
+			},
+		},
+		{
+			name: "NaN value",
+			typ:  domain.FloatType,
+			adds: []domain.Value{
+				domain.FloatValue(math.NaN()),
+			},
+		},
+		{
+			name: "positive infinity",
+			typ:  domain.FloatType,
+			adds: []domain.Value{
+				domain.FloatValue(math.Inf(1)),
+			},
+		},
+		{
+			name: "negative infinity",
+			typ:  domain.FloatType,
+			adds: []domain.Value{
+				domain.FloatValue(math.Inf(-1)),
+			},
+		},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			aggr, err := NewAvgAggregator(tt.typ)
+			if err != nil {
+				t.Fatalf("new avg aggregator: %v", err)
+			}
+
+			var gotErr error
+
+			for _, value := range tt.adds {
+				gotErr = aggr.Add(value)
+				if gotErr != nil {
+					break
+				}
+			}
+
+			if gotErr == nil {
+				t.Fatal("expected error, got nil")
+			}
+		})
+	}
+}
+
+func TestAvgAggregatorStateAfterError(t *testing.T) {
+	aggr, err := NewAvgAggregator(domain.IntType)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := aggr.Add(domain.IntValue(10)); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := aggr.Add(domain.FloatValue(100.5)); err == nil {
+		t.Fatal("expected type error")
+	}
+
+	if err := aggr.Add(domain.IntValue(20)); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := aggr.Result()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := domain.FloatValue(15)
+
+	if got != want {
+		t.Fatalf("want %v, got %v", want, got)
+	}
+}
+
+func TestAvgAggregatorEmpty(t *testing.T) {
+	for _, typ := range []domain.DataType{
+		domain.IntType,
+		domain.FloatType,
+		domain.TimeType,
+	} {
+		t.Run(fmt.Sprint(typ), func(t *testing.T) {
+			aggr, err := NewAvgAggregator(typ)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			_, err = aggr.Result()
+			if err == nil {
+				t.Fatal("expected error for empty sequence")
+			}
+		})
+	}
 }
