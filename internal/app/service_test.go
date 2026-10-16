@@ -50,13 +50,17 @@ func TestService_IngestReader(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	logs, err := service.Query(`level = "DEBUG"`)
+	rows, err := service.Query(`level = "DEBUG"`)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if len(logs) != 2 {
-		t.Fatalf("expected 2 logs, got %d", len(logs))
+	var length int
+	for range rows {
+		length++
+	}
+	if length != 2 {
+		t.Fatalf("expected 2 logs, got %d", length)
 	}
 }
 
@@ -115,10 +119,15 @@ func TestService_RebuildIndexesAfterRestart(t *testing.T) {
 		t.Fatalf("query before restart: %v", err)
 	}
 
-	if len(before) != 2 {
+	var countBefore int
+	for range before {
+		countBefore++
+	}
+
+	if countBefore != 2 {
 		t.Fatalf(
 			"before restart: expected 2 records, got %d",
-			len(before),
+			countBefore,
 		)
 	}
 
@@ -142,11 +151,15 @@ func TestService_RebuildIndexesAfterRestart(t *testing.T) {
 	if err != nil {
 		t.Fatalf("query after restart: %v", err)
 	}
+	var countAfter int
+	for range after{
+		countAfter++
+	}
 
-	if len(after) != 2 {
+	if countAfter != 2 {
 		t.Fatalf(
 			"after restart: expected 2 records, got %d",
-			len(after),
+			countAfter,
 		)
 	}
 
@@ -154,11 +167,15 @@ func TestService_RebuildIndexesAfterRestart(t *testing.T) {
 	if err != nil {
 		t.Fatalf("range query after restart: %v", err)
 	}
+	var count int
+	for range result {
+		count++
+	}
 
-	if len(result) != 2 {
+	if count != 2 {
 		t.Fatalf(
 			"expected 2 records with pid >= 200, got %d",
-			len(result),
+			count,
 		)
 	}
 
@@ -174,11 +191,17 @@ func TestService_RebuildIndexesAfterRestart(t *testing.T) {
 	if err != nil {
 		t.Fatalf("range query after new ingest: %v", err)
 	}
+	count = 0
+	for range result{
+		count++
+	}
 
-	if len(result) != 3 {
+
+
+	if count != 3 {
 		t.Fatalf(
 			"expected 3 records after new ingest, got %d",
-			len(result),
+			count,
 		)
 	}
 }

@@ -1,51 +1,64 @@
-package query
+package execution
 
 import (
 	"errors"
 	"fmt"
+	"iter"
+	"slices"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
 	"fishyAHP/LogParser.git/internal/features/index"
 	"fishyAHP/LogParser.git/internal/features/index/common"
-	"fishyAHP/LogParser.git/internal/features/index/structs"
 )
 
 type Executor struct {
 	indexes *index.Manager
 	catalog *domain.FieldsCatalog
 
-	syntax   *Syntaxes
-	semantic *SemanticAnalyzer
+	lexer    *lexer
+	semantic *semanticAnalyzer
 }
 
 func NewExecutor(
 	indexes *index.Manager,
 	catalog *domain.FieldsCatalog,
-) *Executor {
+) (*Executor, error) {
+	if indexes == nil {
+		return nil, errors.New(
+			"indexes mustn't be nil",
+		)
+	}
+
 	return &Executor{
 		indexes: indexes,
 		catalog: catalog,
-		syntax: NewSyntaxes(
-			NewLexer(),
-		),
-		semantic: NewSemanticAnalyzer(
+		lexer:   newLexer(),
+		semantic: newSemanticAnalyzer(
 			indexes.Scheme,
 		),
-	}
+	}, nil
 }
 
 type Result struct {
-	Fields   []string
-	Posting  *structs.PostingList
-	FullScan bool
-	Limit    *uint64
-	Counting bool
+	Fields  []SelectExpr
+	Posting iter.Seq[domain.RecordID]
+	Limit   *uint64
+	Offset  *uint64
 }
 
 func (e *Executor) Execute(
 	s string,
 ) (Result, error) {
-	query, err := e.syntax.Query(s)
+	lexemes, err := e.lexer.parse(s)
+	if err != nil {
+		return Result{}, fmt.Errorf(
+			"lexer parse: %w",
+			err,
+		)
+	}
+	syntax := newSyntaxes(lexemes)
+
+	query, err := syntax.query()
 	if err != nil {
 		return Result{}, fmt.Errorf(
 			"syntax query: %w",
@@ -53,7 +66,7 @@ func (e *Executor) Execute(
 		)
 	}
 
-	typed, err := e.semantic.Analyze(query, e.catalog)
+	typed, err := e.semantic.analyze(query, e.catalog)
 	if err != nil {
 		return Result{}, fmt.Errorf(
 			"semantic analyze: %w",
@@ -62,18 +75,16 @@ func (e *Executor) Execute(
 	}
 
 	if typed.Expression == nil {
-		if len(typed.Fields) == 0 &&
-			!typed.Counting {
+		if len(typed.Fields) == 0 {
 			return Result{}, errors.New(
 				"empty typed expression",
 			)
 		}
 
 		return Result{
-			Fields:   typed.Fields,
-			FullScan: true,
-			Limit:    typed.Limit,
-			Counting: typed.Counting,
+			Fields: typed.Fields,
+			Limit:  typed.Limit,
+			Offset: typed.Offset,
 		}, nil
 	}
 
@@ -85,16 +96,16 @@ func (e *Executor) Execute(
 		)
 	}
 	return Result{
-		Posting:  res,
-		Fields:   typed.Fields,
-		Limit:    typed.Limit,
-		Counting: typed.Counting,
+		Posting: res,
+		Fields:  typed.Fields,
+		Limit:   typed.Limit,
+		Offset:  typed.Offset,
 	}, nil
 }
 
 func (e *Executor) executeExpr(
 	typedExpr TypedExpr,
-) (*structs.PostingList, error) {
+) (iter.Seq[domain.RecordID], error) {
 	switch ex := typedExpr.(type) {
 	case *TypedBinaryExpr:
 		left, err := e.executeExpr(ex.Left)
@@ -114,9 +125,9 @@ func (e *Executor) executeExpr(
 
 		switch ex.Operator {
 		case Or:
-			return structs.UnionLists(left, right), nil
+			return union(left, right), nil
 		case And:
-			return structs.IntersectionLists(left, right), nil
+			return intersect(left, right), nil
 		default:
 			return nil, fmt.Errorf("unexpected logical operator")
 		}
@@ -126,7 +137,7 @@ func (e *Executor) executeExpr(
 			res, err := e.indexes.Exact(ex.Field, ex.Value)
 			if err != nil {
 				if errors.Is(err, common.ErrRecordNotFound) {
-					return &structs.PostingList{}, nil
+					return slices.Values([]domain.RecordID{}), nil
 				}
 				return nil, fmt.Errorf(
 					"indexes exact: %w",
@@ -143,7 +154,7 @@ func (e *Executor) executeExpr(
 			posting, err := e.indexes.Range(ex.Field, nil, right)
 			if err != nil {
 				if errors.Is(err, common.ErrRecordNotFound) {
-					return &structs.PostingList{}, nil
+					return slices.Values([]domain.RecordID{}), nil
 				}
 				return nil, fmt.Errorf(
 					"index range: %w",
@@ -160,7 +171,7 @@ func (e *Executor) executeExpr(
 			posting, err := e.indexes.Range(ex.Field, left, nil)
 			if err != nil {
 				if errors.Is(err, common.ErrRecordNotFound) {
-					return &structs.PostingList{}, nil
+					return slices.Values([]domain.RecordID{}), nil
 				}
 				return nil, fmt.Errorf(
 					"index range: %w",

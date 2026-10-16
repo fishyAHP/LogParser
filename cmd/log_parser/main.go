@@ -241,7 +241,7 @@ func (c *Cli) query(query string) error {
 		)
 	}
 
-	logs, err := c.service.Query(query)
+	rows, err := c.service.Query(query)
 	if err != nil {
 		return fmt.Errorf(
 			"query %q: %w",
@@ -250,9 +250,14 @@ func (c *Cli) query(query string) error {
 		)
 	}
 
-	for i, logg := range logs {
-		fmt.Fprintf(c.out, "%d) %s\n", i+1, string(logg))
+	var counter int
+	for data, err := range rows {
+		if err != nil {
+			return err
+		}
+		fmt.Fprintln(c.out, string(data))
+		counter++
 	}
-	fmt.Fprintf(c.out, "%d results\n", len(logs))
+	fmt.Fprint(c.out, counter)
 	return nil
 }

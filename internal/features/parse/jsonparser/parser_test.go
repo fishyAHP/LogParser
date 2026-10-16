@@ -16,18 +16,18 @@ func TestParseStringValueWithoutJSONQuotes(t *testing.T) {
 		},
 	})
 
-	entry, err := parser.Parse([]byte(`{"level":"DEBUG"}`))
+	parsed, err := parser.Parse([]byte(`{"level":"DEBUG"}`))
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
 
-	if len(entry.Values) != 1 {
-		t.Fatalf("expected 1 value, got %d", len(entry.Values))
+	if len(parsed.Entry.Values) != 1 {
+		t.Fatalf("expected 1 value, got %d", len(parsed.Entry.Values))
 	}
 
-	level, ok := entry.Values[0].(domain.StringValue)
+	level, ok := parsed.Entry.Values[0].(domain.StringValue)
 	if !ok {
-		t.Fatalf("expected StringValue, got %T", entry.Values[0])
+		t.Fatalf("expected StringValue, got %T", parsed.Entry.Values[0])
 	}
 
 	if level != domain.StringValue("DEBUG") {

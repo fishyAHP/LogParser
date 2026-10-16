@@ -2,15 +2,16 @@ package common
 
 import (
 	"errors"
+	"iter"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
-	"fishyAHP/LogParser.git/internal/features/index/structs"
 )
 
 var (
 	ErrInvalidType     = errors.New("invalid value type")
 	ErrRecordNotFound  = errors.New("record not found")
 	ErrUnsupportedType = errors.New("unsupported type")
+	ErrKeyExist        = errors.New("key already exists")
 )
 
 type Key interface {
@@ -27,33 +28,33 @@ type Index interface {
 
 type ExactIndex interface {
 	Index
-	Exact(domain.Value) (*structs.PostingList, error)
+	Exact(domain.Value) (iter.Seq[domain.RecordID], error)
 }
 
 type RangeIndex interface {
 	ExactIndex
-	Range(from, to *Bound) (*structs.PostingList, error)
+	Range(from, to *Bound) (iter.Seq[domain.RecordID], error)
 }
 
 type TextIndex interface {
 	Index
-	Search(domain.Value) (*structs.PostingList, error)
+	Search(domain.Value) (iter.Seq[domain.RecordID], error)
 }
 
 type Grouper interface {
-	Group(*structs.PostingList) (Groups, error)
+	Group(seq iter.Seq[domain.RecordID]) (Groups, error)
 }
 
 type Aggregator interface {
-	Min(*structs.PostingList) (domain.Value, error)
-	Max(*structs.PostingList) (domain.Value, error)
-	Avg(*structs.PostingList) (domain.Value, error)
-	Sum(*structs.PostingList) (domain.Value, error)
+	Min(seq iter.Seq[domain.RecordID]) (domain.Value, error)
+	Max(seq iter.Seq[domain.RecordID]) (domain.Value, error)
+	Avg(seq iter.Seq[domain.RecordID]) (domain.Value, error)
+	Sum(seq iter.Seq[domain.RecordID]) (domain.Value, error)
 }
 
 type Group struct {
 	Value   domain.Value
-	Records *structs.PostingList
+	Records iter.Seq[domain.RecordID]
 }
 
 type Groups []Group

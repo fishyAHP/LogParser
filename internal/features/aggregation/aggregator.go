@@ -29,7 +29,7 @@ func (a *Aggregator) GroupBy(
 		)
 	}
 
-	res, err := grouper.Group(postings)
+	res, err := grouper.Group(postings.Iterator())
 	if err != nil {
 		return nil, fmt.Errorf(
 			"group postings: %w",
@@ -61,9 +61,15 @@ func (a *Aggregator) CountBy(
 
 	stats := make(CountStats, 0, len(groups))
 	for _, group := range groups {
+		var count int
+
+		for range group.Records {
+			count++
+		}
+
 		stats = append(stats, CountStat{
 			Value: group.Value,
-			Count: group.Records.Len(),
+			Count: count,
 		})
 	}
 
@@ -82,7 +88,7 @@ func (a *Aggregator) Min(
 		)
 	}
 
-	return aggregator.Min(posting)
+	return aggregator.Min(posting.Iterator())
 }
 
 func (a *Aggregator) Max(
@@ -97,5 +103,5 @@ func (a *Aggregator) Max(
 		)
 	}
 
-	return aggregator.Max(posting)
+	return aggregator.Max(posting.Iterator())
 }

@@ -3,10 +3,10 @@ package index
 import (
 	"errors"
 	"fmt"
+	"iter"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
 	"fishyAHP/LogParser.git/internal/features/index/common"
-	"fishyAHP/LogParser.git/internal/features/index/structs"
 )
 
 var (
@@ -87,7 +87,7 @@ func (m *Manager) Index(
 func (m *Manager) Exact(
 	fieldName string,
 	value domain.Value,
-) (*structs.PostingList, error) {
+) (iter.Seq[domain.RecordID], error) {
 	idx, ok := m.indexes[fieldName]
 	if !ok {
 		return nil, ErrIndexNotFound
@@ -112,7 +112,7 @@ func (m *Manager) Exact(
 func (m *Manager) Range(
 	fieldName string,
 	from, to *common.Bound,
-) (*structs.PostingList, error) {
+) (iter.Seq[domain.RecordID], error) {
 	idx, ok := m.indexes[fieldName]
 	if !ok {
 		return nil, ErrIndexNotFound

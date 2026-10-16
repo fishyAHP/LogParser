@@ -1,7 +1,7 @@
 package ranged
 
 import (
-	"errors"
+	"iter"
 	"math"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
@@ -79,7 +79,7 @@ func (t *rbTree[K]) insert(
 			}
 		default:
 			if ok := current.add(value); !ok {
-				return errors.New("key already exist")
+				return common.ErrKeyExist
 			}
 			return
 		}
@@ -198,7 +198,9 @@ func (t *rbTree[K]) rightRotate(n *node[K]) {
 // because if it will return domain.RecordID, it changes
 // from O(log n) to O(n). Also this func return bool which means
 // if true, it founded key, another not yet.
-func (t *rbTree[K]) find(key K) (*structs.PostingList, bool) {
+func (t *rbTree[K]) find(
+	key K,
+) (iter.Seq[domain.RecordID], bool) {
 	cur := t.root
 
 	for cur != nil {
@@ -212,45 +214,64 @@ func (t *rbTree[K]) find(key K) (*structs.PostingList, bool) {
 		default:
 			return cur.
 				records.
-				toPosting(), true
+				iterator(), true
 		}
 	}
 
 	return nil, false
 }
 
-func (t *rbTree[K]) innerRange(from, to *localBound[K]) ([]domain.RecordID, bool) {
-	result := make([]domain.RecordID, 0)
-	result = t.rangeSearch(t.root, from, to, result)
-
-	if len(result) == 0 {
-		return nil, false
+func (t *rbTree[K]) innerRange(
+	from, to *localBound[K],
+) iter.Seq[domain.RecordID] {
+	sources := func(
+		yield func(rec *records) bool,
+	) {
+		for nod := range t.rangeSearch(t.root, from, to) {
+			if !yield(nod.records) {
+				return
+			}
+		}
 	}
-	return result, true
+
+	return merge(sources)
 }
 
 func (t *rbTree[K]) rangeSearch(
 	n *node[K],
 	from, to *localBound[K],
-	res []domain.RecordID,
-) []domain.RecordID {
-	if n == nil {
-		return res
-	}
+) iter.Seq[*node[K]] {
+	return func(yield func(nod *node[K]) bool) {
+		var walk func(*node[K]) bool
 
-	if from == nil || t.compare(n.key, from.value) > 0 {
-		res = t.rangeSearch(n.left, from, to, res)
-	}
+		walk = func(nod1 *node[K]) bool {
+			if nod1 == nil {
+				return true
+			}
 
-	if t.inBoundPeriod(n, from, to) {
-		res = append(res, n.records.slice()...)
-	}
+			if from == nil || t.compare(nod1.key, from.value) > 0 {
+				if !walk(nod1.left) {
+					return false
+				}
+			}
 
-	if to == nil || t.compare(n.key, to.value) < 0 {
-		res = t.rangeSearch(n.right, from, to, res)
-	}
+			if t.inBoundPeriod(nod1, from, to) {
+				if !yield(nod1) {
+					return false
+				}
+			}
 
-	return res
+			if to == nil || t.compare(n.key, to.value) < 0 {
+				if !walk(nod1.right) {
+					return false
+				}
+			}
+
+			return true
+		}
+
+		walk(n)
+	}
 }
 
 func (t *rbTree[K]) inBoundPeriod(n *node[K], left, right *localBound[K]) bool {
@@ -378,6 +399,10 @@ func (t *rbTree[K]) forEach(
 		value domain.Value,
 		count int,
 	) bool) {
+	if t.root == nil {
+		return
+	}
+
 	queue := append(
 		make([]*node[K], 0, t.height()),
 		t.root,
@@ -392,8 +417,10 @@ func (t *rbTree[K]) forEach(
 			posting,
 		)
 
-		if !visit(front.key, matches) {
-			return
+		if matches > 0 {
+			if !visit(front.key, matches) {
+				return
+			}
 		}
 
 		if front.left != nil {
