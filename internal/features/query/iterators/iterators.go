@@ -6,8 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"iter"
+	"slices"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
+	"fishyAHP/LogParser.git/internal/features/aggregation/interfaces"
 	"fishyAHP/LogParser.git/internal/features/parse/common"
 	"fishyAHP/LogParser.git/internal/features/storage"
 )
@@ -54,28 +56,6 @@ func Scan(
 				return
 			}
 		}
-	}
-}
-
-func Count(
-	rows Rows,
-) Rows {
-	return func(yield func([]byte, error) bool) {
-		var counter uint64
-
-		for _, err := range rows {
-			if err != nil {
-				yield(nil, err)
-				return
-			}
-
-			counter++
-		}
-
-		yield(
-			[]byte(fmt.Sprintf(`{"COUNT(*)":%d}`, counter)),
-			nil,
-		)
 	}
 }
 
@@ -171,5 +151,67 @@ func Project(
 			}
 		}
 	}
+}
 
+type AggregateExpr struct {
+	Field      string
+	Name       string
+	Aggregator interfaces.Aggregator
+}
+
+func Aggregate(
+	source Rows,
+	aggregators []AggregateExpr,
+	parser common.Parser,
+) Rows {
+	return func(yield func([]byte, error) bool) {
+		for data, err := range source {
+			if err != nil {
+				yield(nil, err)
+				return
+			}
+
+			parsed, err := parser.Parse(data)
+			if err != nil {
+				yield(nil, err)
+				return
+			}
+
+			for _, aggregator := range aggregators {
+				idx := slices.IndexFunc(parsed.Fields, func(s string) bool {
+					return s == aggregator.Field
+				})
+
+				if idx == -1 {
+					continue
+				}
+
+				value := parsed.Entry.Values[idx]
+				if err = aggregator.Aggregator.Add(value); err != nil {
+					yield(nil, err)
+					return
+				}
+			}
+		}
+
+		result := make(map[string]domain.Value, len(aggregators))
+
+		for _, aggregator := range aggregators {
+			value, err := aggregator.Aggregator.Result()
+			if err != nil {
+				yield(nil, err)
+				return
+			}
+
+			result[aggregator.Name] = value
+		}
+
+		data, err := json.Marshal(result)
+		if err != nil {
+			yield(nil, err)
+			return
+		}
+
+		yield(data, nil)
+	}
 }

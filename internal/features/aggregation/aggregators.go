@@ -13,6 +13,23 @@ var (
 	ErrUnexpectedType = errors.New("unexpected type for aggregator")
 )
 
+type CountAggregator struct {
+	count int64
+}
+
+func (c *CountAggregator) Add(_ domain.Value) error {
+	if c.count == math.MaxInt64 {
+		return errors.New("COUNT overflow")
+	}
+
+	c.count++
+	return nil
+}
+
+func (c *CountAggregator) Result() (domain.Value, error) {
+	return domain.IntValue(c.count), nil
+}
+
 type SumAggregator struct {
 	sum domain.Value
 	typ domain.DataType
