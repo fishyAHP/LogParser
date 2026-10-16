@@ -27,11 +27,11 @@ func main() {
 		}
 	}()
 
-	if err := writeHeapProfile("heap.pprof"); err != nil {
+	if err := c.Run(); err != nil {
 		log.Fatal(err)
 	}
 
-	if err := c.Run(); err != nil {
+	if err := writeHeapProfile("heap.pprof"); err != nil {
 		log.Fatal(err)
 	}
 }

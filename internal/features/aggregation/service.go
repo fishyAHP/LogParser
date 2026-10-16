@@ -4,23 +4,23 @@ import (
 	"fmt"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
+	"fishyAHP/LogParser.git/internal/features/aggregation/interfaces"
 	"fishyAHP/LogParser.git/internal/features/index"
-	"fishyAHP/LogParser.git/internal/features/index/common"
 	"fishyAHP/LogParser.git/internal/features/index/structs"
 )
 
-type Aggregator struct {
+type Service struct {
 	indexes *index.Manager
 }
 
-func (a *Aggregator) Count(posting *structs.PostingList) int {
+func (a *Service) Count(posting *structs.PostingList) int {
 	return posting.Len()
 }
 
-func (a *Aggregator) GroupBy(
+func (a *Service) GroupBy(
 	idxName string,
 	postings *structs.PostingList,
-) (common.Groups, error) {
+) (interfaces.Groups, error) {
 	grouper, err := a.indexes.Grouper(idxName)
 	if err != nil {
 		return nil, fmt.Errorf(
@@ -47,7 +47,7 @@ type CountStat struct {
 
 type CountStats []CountStat
 
-func (a *Aggregator) CountBy(
+func (a *Service) CountBy(
 	idxName string,
 	postings *structs.PostingList,
 ) (CountStats, error) {
@@ -76,32 +76,32 @@ func (a *Aggregator) CountBy(
 	return stats, nil
 }
 
-func (a *Aggregator) Min(
-	idxName string,
-	posting *structs.PostingList,
-) (domain.Value, error) {
-	aggregator, err := a.indexes.Aggregator(idxName)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"find aggregator: %w",
-			err,
-		)
-	}
+//func (a *Service) Min(
+//	idxName string,
+//	posting *structs.PostingList,
+//) (domain.Value, error) {
+//	aggregator, err := a.indexes.Aggregator(idxName)
+//	if err != nil {
+//		return nil, fmt.Errorf(
+//			"find aggregator: %w",
+//			err,
+//		)
+//	}
+//
+//	return aggregator.Result(posting.Iterator())
+//}
 
-	return aggregator.Min(posting.Iterator())
-}
-
-func (a *Aggregator) Max(
-	idxName string,
-	posting *structs.PostingList,
-) (domain.Value, error) {
-	aggregator, err := a.indexes.Aggregator(idxName)
-	if err != nil {
-		return nil, fmt.Errorf(
-			"find aggregator: %w",
-			err,
-		)
-	}
-
-	return aggregator.Max(posting.Iterator())
-}
+//func (a *Service) Max(
+//	idxName string,
+//	posting *structs.PostingList,
+//) (domain.Value, error) {
+//	aggregator, err := a.indexes.Aggregator(idxName)
+//	if err != nil {
+//		return nil, fmt.Errorf(
+//			"find aggregator: %w",
+//			err,
+//		)
+//	}
+//
+//	return aggregator.Max(posting.Iterator())
+//}

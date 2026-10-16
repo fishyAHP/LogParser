@@ -130,14 +130,29 @@ func (s *semanticAnalyzer) analyzeFields(
 
 		case SelectAggregate:
 			// TODO: when will add other aggregate func need change this case
-			if expr.Func != Count {
-				return errors.New("not supported option")
-			}
-			if expr.Field != "*" {
-				return errors.New("not supported option")
-			}
-			if i != 0 {
-				return errors.New("not support option")
+			switch expr.Func {
+			case Max, Min, Avg, Sum:
+				idx := slices.IndexFunc(s.scheme.Parameters, func(a domain.Field) bool {
+					return a.Name == expr.Field
+				})
+
+				if idx == -1 {
+					return fmt.Errorf(
+						"unexpected field name: %q",
+						expr.Field,
+					)
+				}
+
+				need := s.scheme.Parameters[idx]
+				switch need.FieldType {
+				case domain.FloatType, domain.IntType, domain.TimeType:
+				default:
+					return fmt.Errorf(
+						"unsupported type for MIN/MAX: %s",
+						need.FieldType,
+					)
+				}
+			case Count:
 			}
 		}
 	}
