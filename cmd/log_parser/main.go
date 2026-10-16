@@ -258,6 +258,6 @@ func (c *Cli) query(query string) error {
 		fmt.Fprintln(c.out, string(data))
 		counter++
 	}
-	fmt.Println(counter)
+	fmt.Fprint(c.out, counter)
 	return nil
 }
