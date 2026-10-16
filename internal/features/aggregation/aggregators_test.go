@@ -33,6 +33,30 @@ func defaultAvgAggregator(
 	return aggr
 }
 
+func defaultMinAggregator(
+	t *testing.T,
+	typ domain.DataType,
+) *ExtremumAggregator {
+	aggr, err := NewMinAggregator(typ)
+	if err != nil {
+		t.Fatalf("new avg aggregator: %v", err)
+	}
+
+	return aggr
+}
+
+func defaultMaxAggregator(
+	t *testing.T,
+	typ domain.DataType,
+) *ExtremumAggregator {
+	aggr, err := NewMinAggregator(typ)
+	if err != nil {
+		t.Fatalf("new avg aggregator: %v", err)
+	}
+
+	return aggr
+}
+
 func TestSumAggregatorPositive(t *testing.T) {
 	var cases = []struct {
 		name   string
@@ -662,6 +686,293 @@ func TestAvgAggregatorEmpty(t *testing.T) {
 			_, err = aggr.Result()
 			if err == nil {
 				t.Fatal("expected error for empty sequence")
+			}
+		})
+	}
+}
+
+func TestExtremumAggregatorPositive(t *testing.T) {
+	var minCases = []struct {
+		name   string
+		typ    domain.DataType
+		adds   []domain.Value
+		result domain.Value
+	}{
+		{
+			name:   "int positive values",
+			typ:    domain.IntType,
+			adds:   []domain.Value{domain.IntValue(10), domain.IntValue(20), domain.IntValue(30)},
+			result: domain.IntValue(10),
+		},
+		{
+			name:   "int negative values",
+			typ:    domain.IntType,
+			adds:   []domain.Value{domain.IntValue(-10), domain.IntValue(-20), domain.IntValue(-30)},
+			result: domain.IntValue(-30),
+		},
+		{
+			name:   "int mixed signs",
+			typ:    domain.IntType,
+			adds:   []domain.Value{domain.IntValue(-100), domain.IntValue(0), domain.IntValue(100)},
+			result: domain.IntValue(-100),
+		},
+		{
+			name:   "int single value",
+			typ:    domain.IntType,
+			adds:   []domain.Value{domain.IntValue(42)},
+			result: domain.IntValue(42),
+		},
+		{
+			name:   "int extreme values",
+			typ:    domain.IntType,
+			adds:   []domain.Value{domain.IntValue(math.MaxInt64), domain.IntValue(math.MinInt64)},
+			result: domain.IntValue(math.MinInt64),
+		},
+		{
+			name:   "float positive values",
+			typ:    domain.FloatType,
+			adds:   []domain.Value{domain.FloatValue(1.5), domain.FloatValue(0.5), domain.FloatValue(3.5)},
+			result: domain.FloatValue(0.5),
+		},
+		{
+			name:   "float negative values",
+			typ:    domain.FloatType,
+			adds:   []domain.Value{domain.FloatValue(-1.5), domain.FloatValue(-5.5), domain.FloatValue(-2.5)},
+			result: domain.FloatValue(-5.5),
+		},
+		{
+			name:   "string lexicographic",
+			typ:    domain.StringType,
+			adds:   []domain.Value{domain.StringValue("banana"), domain.StringValue("apple"), domain.StringValue("cherry")},
+			result: domain.StringValue("apple"),
+		},
+		{
+			name:   "string empty value",
+			typ:    domain.StringType,
+			adds:   []domain.Value{domain.StringValue("hello"), domain.StringValue(""), domain.StringValue("world")},
+			result: domain.StringValue(""),
+		},
+		{
+			name: "time earliest",
+			typ:  domain.TimeType,
+			adds: []domain.Value{
+				domain.TimeValue(time.Date(2026, 10, 17, 12, 0, 0, 0, time.UTC)),
+				domain.TimeValue(time.Date(2025, 10, 17, 12, 0, 0, 0, time.UTC)),
+				domain.TimeValue(time.Date(2027, 10, 17, 12, 0, 0, 0, time.UTC)),
+			},
+			result: domain.TimeValue(time.Date(2025, 10, 17, 12, 0, 0, 0, time.UTC)),
+		},
+	}
+
+	var maxCases = []struct {
+		name   string
+		typ    domain.DataType
+		adds   []domain.Value
+		result domain.Value
+	}{
+		{
+			name:   "int positive values",
+			typ:    domain.IntType,
+			adds:   []domain.Value{domain.IntValue(10), domain.IntValue(20), domain.IntValue(30)},
+			result: domain.IntValue(30),
+		},
+		{
+			name:   "int negative values",
+			typ:    domain.IntType,
+			adds:   []domain.Value{domain.IntValue(-10), domain.IntValue(-20), domain.IntValue(-30)},
+			result: domain.IntValue(-10),
+		},
+		{
+			name:   "int mixed signs",
+			typ:    domain.IntType,
+			adds:   []domain.Value{domain.IntValue(-100), domain.IntValue(0), domain.IntValue(100)},
+			result: domain.IntValue(100),
+		},
+		{
+			name:   "int single value",
+			typ:    domain.IntType,
+			adds:   []domain.Value{domain.IntValue(42)},
+			result: domain.IntValue(42),
+		},
+		{
+			name:   "int extreme values",
+			typ:    domain.IntType,
+			adds:   []domain.Value{domain.IntValue(math.MaxInt64), domain.IntValue(math.MinInt64)},
+			result: domain.IntValue(math.MaxInt64),
+		},
+		{
+			name:   "float positive values",
+			typ:    domain.FloatType,
+			adds:   []domain.Value{domain.FloatValue(1.5), domain.FloatValue(0.5), domain.FloatValue(3.5)},
+			result: domain.FloatValue(3.5),
+		},
+		{
+			name:   "float negative values",
+			typ:    domain.FloatType,
+			adds:   []domain.Value{domain.FloatValue(-1.5), domain.FloatValue(-5.5), domain.FloatValue(-2.5)},
+			result: domain.FloatValue(-1.5),
+		},
+		{
+			name:   "string lexicographic",
+			typ:    domain.StringType,
+			adds:   []domain.Value{domain.StringValue("banana"), domain.StringValue("apple"), domain.StringValue("cherry")},
+			result: domain.StringValue("cherry"),
+		},
+		{
+			name:   "string empty value",
+			typ:    domain.StringType,
+			adds:   []domain.Value{domain.StringValue("hello"), domain.StringValue(""), domain.StringValue("world")},
+			result: domain.StringValue("world"),
+		},
+		{
+			name: "time latest",
+			typ:  domain.TimeType,
+			adds: []domain.Value{
+				domain.TimeValue(time.Date(2026, 10, 17, 12, 0, 0, 0, time.UTC)),
+				domain.TimeValue(time.Date(2025, 10, 17, 12, 0, 0, 0, time.UTC)),
+				domain.TimeValue(time.Date(2027, 10, 17, 12, 0, 0, 0, time.UTC)),
+			},
+			result: domain.TimeValue(time.Date(2027, 10, 17, 12, 0, 0, 0, time.UTC)),
+		},
+	}
+
+	for _, tt := range minCases {
+		t.Run(tt.name, func(t *testing.T) {
+			aggr, err := NewMinAggregator(tt.typ)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			for _, value := range tt.adds {
+				if err := aggr.Add(value); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			got, err := aggr.Result()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if got != tt.result {
+				t.Fatalf("want %v, got %v", tt.result, got)
+			}
+		})
+	}
+
+	for _, tt := range maxCases {
+		t.Run(tt.name, func(t *testing.T) {
+			aggr, err := NewMaxAggregator(tt.typ)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			for _, value := range tt.adds {
+				if err := aggr.Add(value); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			got, err := aggr.Result()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if got != tt.result {
+				t.Fatalf("want %v, got %v", tt.result, got)
+			}
+		})
+	}
+}
+
+func TestExtremumAggregatorNegative(t *testing.T) {
+	var negativeCases = []struct {
+		name string
+		typ  domain.DataType
+		adds []domain.Value
+	}{
+		{
+			name: "float in int aggregator",
+			typ:  domain.IntType,
+			adds: []domain.Value{domain.FloatValue(10.5)},
+		},
+		{
+			name: "int in float aggregator",
+			typ:  domain.FloatType,
+			adds: []domain.Value{domain.IntValue(10)},
+		},
+		{
+			name: "string in time aggregator",
+			typ:  domain.TimeType,
+			adds: []domain.Value{domain.StringValue("2026-10-17")},
+		},
+		{
+			name: "time in string aggregator",
+			typ:  domain.StringType,
+			adds: []domain.Value{domain.TimeValue(time.Now())},
+		},
+		{
+			name: "bool value",
+			typ:  domain.IntType,
+			adds: []domain.Value{domain.BoolValue(true)},
+		},
+		{
+			name: "nil value",
+			typ:  domain.IntType,
+			adds: []domain.Value{nil},
+		},
+		{
+			name: "NaN",
+			typ:  domain.FloatType,
+			adds: []domain.Value{domain.FloatValue(math.NaN())},
+		},
+		{
+			name: "positive infinity",
+			typ:  domain.FloatType,
+			adds: []domain.Value{domain.FloatValue(math.Inf(1))},
+		},
+		{
+			name: "negative infinity",
+			typ:  domain.FloatType,
+			adds: []domain.Value{domain.FloatValue(math.Inf(-1))},
+		},
+		{
+			name: "invalid value after valid value",
+			typ:  domain.IntType,
+			adds: []domain.Value{
+				domain.IntValue(10),
+				domain.StringValue("invalid"),
+			},
+		},
+	}
+
+	for _, tt := range negativeCases {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, constructor := range []struct {
+				name string
+				new  func(domain.DataType) (*ExtremumAggregator, error)
+			}{
+				{"MIN", NewMinAggregator},
+				{"MAX", NewMaxAggregator},
+			} {
+				t.Run(constructor.name, func(t *testing.T) {
+					aggr, err := constructor.new(tt.typ)
+					if err != nil {
+						t.Fatal(err)
+					}
+
+					var gotErr error
+					for _, value := range tt.adds {
+						gotErr = aggr.Add(value)
+						if gotErr != nil {
+							break
+						}
+					}
+
+					if gotErr == nil {
+						t.Fatal("expected error, got nil")
+					}
+				})
 			}
 		})
 	}
