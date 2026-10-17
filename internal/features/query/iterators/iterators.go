@@ -163,6 +163,7 @@ func Aggregate(
 	source Rows,
 	aggregators []AggregateExpr,
 	parser common.Parser,
+	scheme *domain.Scheme,
 ) Rows {
 	return func(yield func([]byte, error) bool) {
 		for data, err := range source {
@@ -178,8 +179,16 @@ func Aggregate(
 			}
 
 			for _, aggregator := range aggregators {
-				idx := slices.IndexFunc(parsed.Fields, func(s string) bool {
-					return s == aggregator.Field
+				if aggregator.Field == "*" {
+					if err = aggregator.Aggregator.Add(nil); err != nil {
+						yield(nil, err)
+						return
+					}
+					continue
+				}
+
+				idx := slices.IndexFunc(scheme.Parameters, func(f domain.Field) bool {
+					return f.Name == aggregator.Field
 				})
 
 				if idx == -1 {

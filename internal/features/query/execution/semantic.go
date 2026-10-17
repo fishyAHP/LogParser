@@ -100,7 +100,7 @@ func (s *semanticAnalyzer) analyzeFields(
 	fields []SelectExpr,
 	catalog *domain.FieldsCatalog,
 ) error {
-	for i, field := range fields {
+	for _, field := range fields {
 		switch expr := field.(type) {
 		case SelectWildCard:
 			if len(fields) != 1 {
@@ -129,30 +129,57 @@ func (s *semanticAnalyzer) analyzeFields(
 			}
 
 		case SelectAggregate:
-			// TODO: when will add other aggregate func need change this case
+			if expr.Func == Count &&
+				expr.Field == "*" {
+				continue
+			}
+
+			idx := slices.IndexFunc(s.scheme.Parameters, func(a domain.Field) bool {
+				return a.Name == expr.Field
+			})
+
+			if idx == -1 {
+				return fmt.Errorf(
+					"undefined aggregate field: %q",
+					expr.Field,
+				)
+			}
+
+			need := s.scheme.Parameters[idx].FieldType
+
 			switch expr.Func {
-			case Max, Min, Avg, Sum:
-				idx := slices.IndexFunc(s.scheme.Parameters, func(a domain.Field) bool {
-					return a.Name == expr.Field
-				})
-
-				if idx == -1 {
+			case Max, Min:
+				if !In(need, domain.FloatType,
+					domain.IntType, domain.TimeType,
+					domain.StringType) {
 					return fmt.Errorf(
-						"unexpected field name: %q",
-						expr.Field,
+						"unsupported type for MIN/MAX: %v",
+						need,
+					)
+				}
+			case Avg:
+				if !In(need, domain.FloatType,
+					domain.IntType, domain.TimeType) {
+					return fmt.Errorf(
+						"unsupported type for AVG: %v",
+						need,
+					)
+				}
+			case Sum:
+				if !In(need, domain.FloatType,
+					domain.IntType) {
+					return fmt.Errorf(
+						"unsupported type for SUM: %v",
+						need,
 					)
 				}
 
-				need := s.scheme.Parameters[idx]
-				switch need.FieldType {
-				case domain.FloatType, domain.IntType, domain.TimeType:
-				default:
-					return fmt.Errorf(
-						"unsupported type for MIN/MAX: %s",
-						need.FieldType,
-					)
-				}
 			case Count:
+			default:
+				return fmt.Errorf(
+					"unsupported aggregate func: %s",
+					expr.Field,
+				)
 			}
 		}
 	}
@@ -320,4 +347,8 @@ func parseValue(field domain.DataType, lexeme lexeme) (domain.Value, error) {
 			field,
 		)
 	}
+}
+
+func In(need domain.DataType, other ...domain.DataType) bool {
+	return slices.Contains(other, need)
 }

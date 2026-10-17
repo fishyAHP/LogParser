@@ -117,6 +117,23 @@ const (
 	Sum
 )
 
+func (a AggregateFunc) String() string {
+	switch a {
+	case Count:
+		return "COUNT"
+	case Max:
+		return "MAX"
+	case Min:
+		return "MIN"
+	case Avg:
+		return "AVG"
+	case Sum:
+		return "SUM"
+	default:
+		return "unknown"
+	}
+}
+
 type SelectAggregate struct {
 	Func  AggregateFunc
 	Field string

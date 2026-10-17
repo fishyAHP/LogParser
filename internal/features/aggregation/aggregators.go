@@ -17,6 +17,10 @@ type CountAggregator struct {
 	count int64
 }
 
+func NewCountAggregator() *CountAggregator {
+	return &CountAggregator{}
+}
+
 func (c *CountAggregator) Add(_ domain.Value) error {
 	if c.count == math.MaxInt64 {
 		return errors.New("COUNT overflow")
