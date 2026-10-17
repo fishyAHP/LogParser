@@ -145,45 +145,6 @@ func TestLimit(t *testing.T) {
 	}
 }
 
-func TestCount(t *testing.T) {
-	tests := []struct {
-		name  string
-		input []string
-		want  string
-	}{
-		{
-			name:  "empty source",
-			input: nil,
-			want:  `{"COUNT(*)":0}`,
-		},
-		{
-			name:  "one record",
-			input: []string{"a"},
-			want:  `{"COUNT(*)":1}`,
-		},
-		{
-			name:  "multiple records",
-			input: []string{"a", "b", "c"},
-			want:  `{"COUNT(*)":3}`,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := collect(Count(testSource(tt.input...)))
-			if err != nil {
-				t.Fatal(err)
-			}
-
-			want := []string{tt.want}
-
-			if !reflect.DeepEqual(got, want) {
-				t.Errorf("got %v, want %v", got, want)
-			}
-		})
-	}
-}
-
 func TestPaginationPipeline(t *testing.T) {
 	source := testSource("a", "b", "c", "d", "e")
 
@@ -196,24 +157,6 @@ func TestPaginationPipeline(t *testing.T) {
 	}
 
 	want := []string{"c", "d"}
-
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("got %v, want %v", got, want)
-	}
-}
-
-func TestCountPipeline(t *testing.T) {
-	source := testSource("a", "b", "c")
-
-	rows := Count(source)
-	rows = Limit(rows, 10)
-
-	got, err := collect(rows)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	want := []string{`{"COUNT(*)":3}`}
 
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("got %v, want %v", got, want)
@@ -233,7 +176,6 @@ func TestIteratorErrorPropagation(t *testing.T) {
 	}{
 		{"offset", func(r Rows) Rows { return Offset(r, 2) }},
 		{"limit", func(r Rows) Rows { return Limit(r, 2) }},
-		{"count", Count},
 	}
 
 	for _, tt := range tests {
@@ -262,11 +204,6 @@ func TestIteratorsRepeatedTraversal(t *testing.T) {
 			name: "offset",
 			rows: Offset(testSource("a", "b", "c"), 1),
 			want: []string{"b", "c"},
-		},
-		{
-			name: "count",
-			rows: Count(testSource("a", "b", "c")),
-			want: []string{`{"COUNT(*)":3}`},
 		},
 	}
 

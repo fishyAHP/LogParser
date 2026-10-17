@@ -100,6 +100,23 @@ func (s *semanticAnalyzer) analyzeFields(
 	fields []SelectExpr,
 	catalog *domain.FieldsCatalog,
 ) error {
+	var hasAggregate, hasField bool
+
+	for _, expr := range fields {
+		switch expr.(type) {
+		case SelectAggregate:
+			hasAggregate = true
+		case SelectedField:
+			hasField = true
+		}
+	}
+
+	if hasAggregate && hasField {
+		return errors.New(
+			"cannot mix aggregate functions with regular fields without GROUP BY",
+		)
+	}
+
 	for _, field := range fields {
 		switch expr := field.(type) {
 		case SelectWildCard:
