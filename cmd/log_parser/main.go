@@ -27,11 +27,11 @@ func main() {
 		}
 	}()
 
-	if err := writeHeapProfile("heap.pprof"); err != nil {
+	if err := c.Run(); err != nil {
 		log.Fatal(err)
 	}
 
-	if err := c.Run(); err != nil {
+	if err := writeHeapProfile("heap.pprof"); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -250,14 +250,11 @@ func (c *Cli) query(query string) error {
 		)
 	}
 
-	var counter int
 	for data, err := range rows {
 		if err != nil {
 			return err
 		}
 		fmt.Fprintln(c.out, string(data))
-		counter++
 	}
-	fmt.Fprint(c.out, counter)
 	return nil
 }

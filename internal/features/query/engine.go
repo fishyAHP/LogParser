@@ -3,8 +3,11 @@ package query
 import (
 	"errors"
 	"fmt"
+	"slices"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
+	"fishyAHP/LogParser.git/internal/features/aggregation"
+	"fishyAHP/LogParser.git/internal/features/aggregation/interfaces"
 	"fishyAHP/LogParser.git/internal/features/index"
 	"fishyAHP/LogParser.git/internal/features/parse"
 	"fishyAHP/LogParser.git/internal/features/query/execution"
@@ -67,20 +70,16 @@ func (e *Engine) buildIterators(
 ) (iterators.Rows, error) {
 	rows := iterators.Scan(result.Posting, e.store)
 
-	// TODO when add group by and other aggregates func need change it
 	if hasAggregate(result.Fields) {
-		if len(result.Fields) != 1 {
-			return nil, errors.New(
-				"multiple expressions with aggregates are not supported yet",
-			)
+		aggregators, err := e.buildAggregators(result.Fields)
+		if err != nil {
+			return nil, err
 		}
 
-		aggregate, ok := result.Fields[0].(execution.SelectAggregate)
-		if !ok || aggregate.Func != execution.Count || aggregate.Field != "*" {
-			return nil, errors.New("unsupported aggregate")
-		}
-
-		rows = iterators.Count(rows)
+		rows = iterators.Aggregate(
+			rows, aggregators,
+			e.parser, e.executor.Indexes.Scheme,
+		)
 	} else {
 		fields, err := selectFields(result.Fields)
 		if err != nil {
@@ -99,6 +98,34 @@ func (e *Engine) buildIterators(
 	}
 
 	return rows, nil
+}
+
+func (e *Engine) buildAggregators(
+	fields []execution.SelectExpr,
+) ([]iterators.AggregateExpr, error) {
+	result := make([]iterators.AggregateExpr, 0, len(fields))
+
+	for _, field := range fields {
+		aggr, ok := field.(execution.SelectAggregate)
+		if !ok {
+			return nil, errors.New(
+				"unexpected type with aggregators",
+			)
+		}
+
+		instance, err := e.newAggregator(aggr)
+		if err != nil {
+			return nil, err
+		}
+
+		result = append(result, iterators.AggregateExpr{
+			Name:       fmt.Sprintf("%s(%s)", aggr.Func.String(), aggr.Field),
+			Field:      aggr.Field,
+			Aggregator: instance,
+		})
+	}
+
+	return result, nil
 }
 
 func hasAggregate(
@@ -139,4 +166,52 @@ func selectFields(
 	}
 
 	return fields, nil
+}
+
+func (e *Engine) newAggregator(
+	field execution.SelectAggregate,
+) (interfaces.Aggregator, error) {
+	if field.Func == execution.Count {
+		return aggregation.NewCountAggregator(), nil
+	}
+
+	idx := slices.IndexFunc(
+		e.executor.Indexes.Scheme.Parameters,
+		func(f domain.Field) bool {
+			return f.Name == field.Field
+		},
+	)
+
+	if idx == -1 {
+		return nil, fmt.Errorf(
+			"field %q not found in scheme",
+			field.Field,
+		)
+	}
+
+	typ := e.executor.
+		Indexes.
+		Scheme.
+		Parameters[idx].
+		FieldType
+
+	switch field.Func {
+	case execution.Sum:
+		return aggregation.NewSumAggregator(typ)
+
+	case execution.Avg:
+		return aggregation.NewAvgAggregator(typ)
+
+	case execution.Min:
+		return aggregation.NewMinAggregator(typ)
+
+	case execution.Max:
+		return aggregation.NewMaxAggregator(typ)
+
+	default:
+		return nil, fmt.Errorf(
+			"unsupported aggregate function: %v",
+			field.Func,
+		)
+	}
 }

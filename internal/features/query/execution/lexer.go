@@ -22,6 +22,10 @@ func newLexer() *lexer {
 			"limit":  LimitType,
 			"offset": OffsetType,
 			"count":  CountType,
+			"min":    MinType,
+			"max":    MaxType,
+			"avg":    AvgType,
+			"sum":    SumType,
 		},
 		operators: map[string]lexemeType{
 			"=":  EqualType,
@@ -70,6 +74,10 @@ const (
 	LimitType
 	OffsetType
 	CountType
+	MinType
+	MaxType
+	AvgType
+	SumType
 
 	// EOF - end of file or string
 	EOF

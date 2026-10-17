@@ -12,7 +12,7 @@ import (
 )
 
 type Executor struct {
-	indexes *index.Manager
+	Indexes *index.Manager
 	catalog *domain.FieldsCatalog
 
 	lexer    *lexer
@@ -30,7 +30,7 @@ func NewExecutor(
 	}
 
 	return &Executor{
-		indexes: indexes,
+		Indexes: indexes,
 		catalog: catalog,
 		lexer:   newLexer(),
 		semantic: newSemanticAnalyzer(
@@ -129,12 +129,15 @@ func (e *Executor) executeExpr(
 		case And:
 			return intersect(left, right), nil
 		default:
-			return nil, fmt.Errorf("unexpected logical operator")
+			return nil, fmt.Errorf(
+				"unexpected logical operator: %s",
+				ex.Operator,
+			)
 		}
 	case *TypedCondition:
 		switch ex.Operator {
 		case Equal:
-			res, err := e.indexes.Exact(ex.Field, ex.Value)
+			res, err := e.Indexes.Exact(ex.Field, ex.Value)
 			if err != nil {
 				if errors.Is(err, common.ErrRecordNotFound) {
 					return slices.Values([]domain.RecordID{}), nil
@@ -151,7 +154,7 @@ func (e *Executor) executeExpr(
 				Inclusive: LessOrEqual == ex.Operator,
 			}
 
-			posting, err := e.indexes.Range(ex.Field, nil, right)
+			posting, err := e.Indexes.Range(ex.Field, nil, right)
 			if err != nil {
 				if errors.Is(err, common.ErrRecordNotFound) {
 					return slices.Values([]domain.RecordID{}), nil
@@ -168,7 +171,7 @@ func (e *Executor) executeExpr(
 				Inclusive: BiggerOrEqual == ex.Operator,
 			}
 
-			posting, err := e.indexes.Range(ex.Field, left, nil)
+			posting, err := e.Indexes.Range(ex.Field, left, nil)
 			if err != nil {
 				if errors.Is(err, common.ErrRecordNotFound) {
 					return slices.Values([]domain.RecordID{}), nil

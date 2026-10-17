@@ -6,6 +6,7 @@ import (
 	"iter"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
+	"fishyAHP/LogParser.git/internal/features/aggregation/interfaces"
 	"fishyAHP/LogParser.git/internal/features/index/common"
 )
 
@@ -137,7 +138,7 @@ func (m *Manager) Clear() {
 
 func (m *Manager) Grouper(
 	name string,
-) (common.Grouper, error) {
+) (interfaces.Grouper, error) {
 	idx, ok := m.indexes[name]
 	if !ok {
 		return nil, fmt.Errorf(
@@ -147,7 +148,7 @@ func (m *Manager) Grouper(
 		)
 	}
 
-	grouper, ok := idx.(common.Grouper)
+	grouper, ok := idx.(interfaces.Grouper)
 	if !ok {
 		return nil, fmt.Errorf(
 			"%w: %q",
@@ -161,7 +162,7 @@ func (m *Manager) Grouper(
 
 func (m *Manager) Aggregator(
 	name string,
-) (common.Aggregator, error) {
+) (interfaces.Grouper, error) {
 	idx, ok := m.indexes[name]
 	if !ok {
 		return nil, fmt.Errorf(
@@ -171,7 +172,7 @@ func (m *Manager) Aggregator(
 		)
 	}
 
-	aggregator, ok := idx.(common.Aggregator)
+	aggregator, ok := idx.(interfaces.Grouper)
 	if !ok {
 		return nil, fmt.Errorf(
 			"%w: %q",

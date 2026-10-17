@@ -41,24 +41,6 @@ type TextIndex interface {
 	Search(domain.Value) (iter.Seq[domain.RecordID], error)
 }
 
-type Grouper interface {
-	Group(seq iter.Seq[domain.RecordID]) (Groups, error)
-}
-
-type Aggregator interface {
-	Min(seq iter.Seq[domain.RecordID]) (domain.Value, error)
-	Max(seq iter.Seq[domain.RecordID]) (domain.Value, error)
-	Avg(seq iter.Seq[domain.RecordID]) (domain.Value, error)
-	Sum(seq iter.Seq[domain.RecordID]) (domain.Value, error)
-}
-
-type Group struct {
-	Value   domain.Value
-	Records iter.Seq[domain.RecordID]
-}
-
-type Groups []Group
-
 type Bound struct {
 	Value     domain.Value
 	Inclusive bool

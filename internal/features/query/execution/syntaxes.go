@@ -117,6 +117,23 @@ const (
 	Sum
 )
 
+func (a AggregateFunc) String() string {
+	switch a {
+	case Count:
+		return "COUNT"
+	case Max:
+		return "MAX"
+	case Min:
+		return "MIN"
+	case Avg:
+		return "AVG"
+	case Sum:
+		return "SUM"
+	default:
+		return "unknown"
+	}
+}
+
 type SelectAggregate struct {
 	Func  AggregateFunc
 	Field string
@@ -211,7 +228,7 @@ func (s *syntaxes) parseSelectExpr() (SelectExpr, error) {
 		s.advance()
 		return SelectedField(lex.Literal), nil
 
-	case CountType:
+	case CountType, MaxType, MinType, SumType, AvgType:
 		return s.parseAggregate()
 	default:
 		return nil, fmt.Errorf(
@@ -223,34 +240,57 @@ func (s *syntaxes) parseSelectExpr() (SelectExpr, error) {
 }
 
 func (s *syntaxes) parseAggregate() (SelectAggregate, error) {
-	if _, err := s.expect(CountType); err != nil {
-		return SelectAggregate{}, err
+	lex := s.current()
+
+	var aggregate AggregateFunc
+	switch lex.Type {
+	case CountType:
+		aggregate = Count
+	case MaxType:
+		aggregate = Max
+	case MinType:
+		aggregate = Min
+	case AvgType:
+		aggregate = Avg
+	case SumType:
+		aggregate = Sum
+	default:
+		return SelectAggregate{}, fmt.Errorf(
+			"%w: invalid aggregate: %s",
+			ErrUnexpectedLexeme,
+			lex.Type,
+		)
 	}
 
+	s.advance()
 	if _, err := s.expect(LeftParen); err != nil {
 		return SelectAggregate{}, err
 	}
 
 	argument := s.current()
-
-	switch argument.Type {
-	case Identifier, AsteriskType:
-		s.advance()
-
-	default:
+	if aggregate == Count {
+		if argument.Type != Identifier &&
+			argument.Type != AsteriskType {
+			return SelectAggregate{}, fmt.Errorf(
+				"%w: invalid COUNT argument",
+				ErrUnexpectedLexeme,
+			)
+		}
+	} else if argument.Type != Identifier {
 		return SelectAggregate{}, fmt.Errorf(
-			"%w: invalid COUNT argument: %s",
+			"%w: aggregate requires field name",
 			ErrUnexpectedLexeme,
-			argument.Type,
 		)
 	}
+
+	s.advance()
 
 	if _, err := s.expect(RightParen); err != nil {
 		return SelectAggregate{}, err
 	}
 
 	return SelectAggregate{
-		Func:  Count,
+		Func:  aggregate,
 		Field: argument.Literal,
 	}, nil
 }

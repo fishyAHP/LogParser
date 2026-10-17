@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
+	"fishyAHP/LogParser.git/internal/features/aggregation/interfaces"
 	"fishyAHP/LogParser.git/internal/features/index/common"
 	"fishyAHP/LogParser.git/internal/features/index/structs"
 )
@@ -103,14 +104,14 @@ func (i *Index[K]) Clear() {
 
 func (i *Index[K]) Group(
 	posting *structs.PostingList,
-) (common.Groups, error) {
-	groups := make(common.Groups, 0, len(i.idx))
+) (interfaces.Groups, error) {
+	groups := make(interfaces.Groups, 0, len(i.idx))
 
 	for k, v := range i.idx {
 		res := structs.IntersectionLists(posting, v)
 
 		if res.Len() > 0 {
-			groups = append(groups, common.Group{
+			groups = append(groups, interfaces.Group{
 				Value:   k,
 				Records: res.Iterator(),
 			})
