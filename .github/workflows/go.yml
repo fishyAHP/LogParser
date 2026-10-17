@@ -13,6 +13,11 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: cmd/log_parser
+    
     steps:
     - uses: actions/checkout@v4
 
