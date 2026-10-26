@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
-	"fishyAHP/LogParser.git/internal/features/index/common"
 )
 
 func TestRangeIterator(t *testing.T) {
@@ -18,8 +17,8 @@ func TestRangeIterator(t *testing.T) {
 	tests := []struct {
 		name    string
 		records []record
-		from    *common.Bound
-		to      *common.Bound
+		from    *domain.Bound
+		to      *domain.Bound
 		want    []domain.RecordID
 	}{
 		{
@@ -42,11 +41,11 @@ func TestRangeIterator(t *testing.T) {
 				{9, 30},
 				{12, 50},
 			},
-			from: &common.Bound{
+			from: &domain.Bound{
 				Value:     domain.IntValue(20),
 				Inclusive: true,
 			},
-			to: &common.Bound{
+			to: &domain.Bound{
 				Value:     domain.IntValue(40),
 				Inclusive: true,
 			},
@@ -61,11 +60,11 @@ func TestRangeIterator(t *testing.T) {
 				{4, 40},
 				{5, 50},
 			},
-			from: &common.Bound{
+			from: &domain.Bound{
 				Value:     domain.IntValue(20),
 				Inclusive: false,
 			},
-			to: &common.Bound{
+			to: &domain.Bound{
 				Value:     domain.IntValue(40),
 				Inclusive: false,
 			},
@@ -90,7 +89,7 @@ func TestRangeIterator(t *testing.T) {
 				{3, 30},
 				{4, 40},
 			},
-			from: &common.Bound{
+			from: &domain.Bound{
 				Value:     domain.IntValue(25),
 				Inclusive: true,
 			},
@@ -104,7 +103,7 @@ func TestRangeIterator(t *testing.T) {
 				{3, 30},
 				{4, 40},
 			},
-			to: &common.Bound{
+			to: &domain.Bound{
 				Value:     domain.IntValue(25),
 				Inclusive: true,
 			},
@@ -117,11 +116,11 @@ func TestRangeIterator(t *testing.T) {
 				{2, 20},
 				{3, 30},
 			},
-			from: &common.Bound{
+			from: &domain.Bound{
 				Value:     domain.IntValue(20),
 				Inclusive: true,
 			},
-			to: &common.Bound{
+			to: &domain.Bound{
 				Value:     domain.IntValue(20),
 				Inclusive: true,
 			},
