@@ -124,18 +124,18 @@ func (b *BinaryEntry) UnmarshalBinary(
 			keyLength,
 		)
 	}
-	keyEnd := keyLengthSize + keyLength
-	if int(keyEnd) >= dataLength {
+	keyEnd := keyLengthSize + int(keyLength)
+	if dataLength-keyEnd < recordsCountSize {
 		return fmt.Errorf(
-			"key must be shorter than data: %d",
-			keyEnd,
+			"truncated records count: %d",
+			keyEnd+dataLength,
 		)
 	}
 
 	key := data[keyLengthSize:keyEnd]
 	recordsCountEnd := keyEnd + recordsCountSize
 
-	if int(recordsCountEnd) > len(data) {
+	if recordsCountEnd > len(data) {
 		return fmt.Errorf(
 			"end of records count more than len data: %d",
 			recordsCountEnd,
@@ -147,7 +147,7 @@ func (b *BinaryEntry) UnmarshalBinary(
 	)
 
 	if recordsCount > uint64(
-		(dataLength-int(recordsCountEnd))/8,
+		(dataLength-recordsCountEnd)/8,
 	) {
 		return fmt.Errorf(
 			"invalid records count: %d",
@@ -155,16 +155,7 @@ func (b *BinaryEntry) UnmarshalBinary(
 		)
 	}
 
-	recordsSize := recordsCount * 8
-	recordsEnd := uint64(recordsCountEnd) + recordsSize
-
-	if int(recordsEnd) > dataLength {
-		return fmt.Errorf(
-			"records must be equal to len data: %d",
-			recordsEnd,
-		)
-	}
-
+	recordsEnd := recordsCountEnd + int(recordsCount)*8
 	records := data[recordsCountEnd:recordsEnd]
 
 	tmp := BinaryEntry{
@@ -187,6 +178,10 @@ func (b *BinaryEntry) UnmarshalBinary(
 }
 
 func (i *Index[K]) MarshalBinary() ([]byte, error) {
+	if uint64(len(i.idx)) > math.MaxUint32 {
+		return nil, fmt.Errorf("too many index entries")
+	}
+
 	var buf bytes.Buffer
 
 	if err := binary.Write(
@@ -214,6 +209,9 @@ func (i *Index[K]) MarshalBinary() ([]byte, error) {
 		keyData, err := encodeKey(key)
 		if err != nil {
 			return nil, err
+		}
+		if uint64(len(keyData)) > math.MaxUint32 {
+			return nil, fmt.Errorf("too many index entries")
 		}
 
 		postData, err := posting.MarshalBinary()
@@ -274,16 +272,18 @@ func (i *Index[K]) UnmarshalBinary(
 		data[offset : offset+entriesCountSize],
 	)
 
-	if int(entriesCount) != len(tmp.idx) {
+	offset += entriesCountSize
+	idx := offset
+
+	if uint64(entriesCount) >
+		uint64((len(data)-offset)/12) {
 		return fmt.Errorf(
-			"entries count not consistently: %d and %d",
+			"invalid entries count: %d",
 			entriesCount,
-			len(tmp.idx),
 		)
 	}
 
-	offset += entriesCountSize
-	for idx := offset; idx < len(data); {
+	for range entriesCount {
 		var entry BinaryEntry
 
 		if err := entry.UnmarshalBinary(
@@ -331,6 +331,13 @@ func (i *Index[K]) UnmarshalBinary(
 			len(entry.Records)
 
 		idx += size
+	}
+
+	if idx != len(data) {
+		return fmt.Errorf(
+			"unexpected trailing data: %d bytes",
+			len(data)-idx,
+		)
 	}
 
 	*i = Index[K]{
