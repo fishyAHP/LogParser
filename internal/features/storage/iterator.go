@@ -12,7 +12,19 @@ import (
 	"fishyAHP/LogParser.git/internal/core/domain"
 )
 
-type Iterator struct {
+type Iterator interface {
+	Next() bool
+
+	Data() []byte
+	RecordID() domain.RecordID
+	Pointer() domain.RecordPointer
+
+	Err() error
+	Close() error
+}
+
+
+type storageIterator struct {
 	dir string
 
 	segmentID uint64
@@ -28,7 +40,7 @@ type Iterator struct {
 	done bool
 }
 
-func (i *Iterator) Next() bool {
+func (i *storageIterator) Next() bool {
 	if i.done || i.err != nil {
 		return false
 	}
@@ -148,26 +160,26 @@ func openFile(dir string, curID uint64) (*os.File, error) {
 	return file, nil
 }
 
-func (i *Iterator) Data() []byte {
+func (i *storageIterator) Data() []byte {
 	return i.data
 }
 
-func (i *Iterator) RecordID() domain.RecordID {
+func (i *storageIterator) RecordID() domain.RecordID {
 	return i.id
 }
 
-func (i *Iterator) Pointer() domain.RecordPointer {
+func (i *storageIterator) Pointer() domain.RecordPointer {
 	return i.pointer
 }
 
-func (i *Iterator) Err() error {
+func (i *storageIterator) Err() error {
 	if i.err != nil {
 		return i.err
 	}
 	return nil
 }
 
-func (i *Iterator) Close() error {
+func (i *storageIterator) Close() error {
 	if i.file == nil {
 		return nil
 	}

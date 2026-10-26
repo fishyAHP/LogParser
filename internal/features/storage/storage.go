@@ -373,8 +373,8 @@ func (s *Storage) rotationSegment() error {
 	return nil
 }
 
-func (s *Storage) Iterator() *Iterator {
-	return &Iterator{
+func (s *Storage) Iterator() Iterator {
+	return &storageIterator{
 		dir: s.dir,
 	}
 }

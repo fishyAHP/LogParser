@@ -40,7 +40,7 @@ func (f FileSize) String() string {
 	}
 }
 
-// segment представляет собой файл, в который сейчас происходит запись
+// Структура segment представляет собой файл, в котором сейчас происходит запись или чтение
 type segment struct {
 	ID   uint64
 	size FileSize
@@ -73,7 +73,10 @@ func newSegment(
 		0o644,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("open segment: %w", err)
+		return nil, fmt.Errorf(
+			"open segment: %w",
+			err,
+		)
 	}
 
 	defer func() {
@@ -124,10 +127,15 @@ func newSegment(
 func writeFileHeader(file *os.File) error {
 	n, err := file.Write(Magic)
 	if err != nil {
-		return fmt.Errorf("write magic: %w", err)
+		return fmt.Errorf(
+			"write magic: %w",
+			err,
+		)
 	}
 	if n != len(Magic) {
-		return errors.New("corrupted write magic")
+		return errors.New(
+			"corrupted write magic",
+		)
 	}
 
 	return nil
@@ -143,24 +151,41 @@ func validateFileHeader(file *os.File) error {
 		)
 	}
 	if n != len(Magic) {
-		return errors.New("corrupted read magic")
+		return errors.New(
+			"corrupted read magic",
+		)
 	}
 
 	if !bytes.Equal(buf, Magic) {
-		return errors.New("invalid file magic")
+		return errors.New(
+			"invalid file magic",
+		)
 	}
 	return nil
 }
 
-func (s *segment) isOverloaded(size FileSize) bool {
-	return float64(s.size+size+RecordHeaderSize)/float64(MaxSegmentSize) >= loadFactor
+func (s *segment) isOverloaded(
+	size FileSize,
+) bool {
+	return float64(s.size+size+RecordHeaderSize)/
+		float64(MaxSegmentSize) >=
+		loadFactor
 }
 
-func (s *segment) write(data []byte, recordID uint64) (domain.RecordPointer, error) {
+func (s *segment) write(
+	data []byte,
+	recordID uint64,
+) (domain.RecordPointer, error) {
 	header := make([]byte, RecordHeaderSize)
 
-	binary.BigEndian.PutUint32(header[0:4], uint32(len(data)))
-	binary.BigEndian.PutUint64(header[4:12], recordID)
+	binary.BigEndian.PutUint32(
+		header[0:4],
+		uint32(len(data)),
+	)
+	binary.BigEndian.PutUint64(
+		header[4:12],
+		recordID,
+	)
 
 	buf := make([]byte, 0, int(RecordHeaderSize)+len(data))
 	buf = append(buf, header...)
@@ -185,13 +210,20 @@ func (s *segment) write(data []byte, recordID uint64) (domain.RecordPointer, err
 	return pointer, nil
 }
 
-func (s *segment) read(pointer domain.RecordPointer) ([]byte, error) {
+func (s *segment) read(
+	pointer domain.RecordPointer,
+) ([]byte, error) {
 	if s.ID != pointer.SegmentID {
-		return nil, errors.New("not suitable id data")
+		return nil, errors.New(
+			"not suitable id data",
+		)
 	}
 
 	data := make([]byte, pointer.Length)
-	if _, err := s.file.ReadAt(data, int64(pointer.Offset)); err != nil {
+	if _, err := s.file.ReadAt(
+		data,
+		int64(pointer.Offset),
+	); err != nil {
 		return nil, fmt.Errorf(
 			"read segment file: %w",
 			err,

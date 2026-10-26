@@ -7,20 +7,31 @@ import (
 	"slices"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
-	"fishyAHP/LogParser.git/internal/features/index"
 	"fishyAHP/LogParser.git/internal/features/index/common"
 )
 
 type Executor struct {
-	Indexes *index.Manager
+	Indexes IndexReader
 	catalog *domain.FieldsCatalog
 
 	lexer    *lexer
 	semantic *semanticAnalyzer
 }
 
+type IndexReader interface {
+	Exact(
+		name string,
+		value domain.Value,
+	) (iter.Seq[domain.RecordID], error)
+	Range(
+		name string,
+		from, to *domain.Bound,
+	) (iter.Seq[domain.RecordID], error)
+	Scheme() *domain.Scheme
+}
+
 func NewExecutor(
-	indexes *index.Manager,
+	indexes IndexReader,
 	catalog *domain.FieldsCatalog,
 ) (*Executor, error) {
 	if indexes == nil {
@@ -34,7 +45,7 @@ func NewExecutor(
 		catalog: catalog,
 		lexer:   newLexer(),
 		semantic: newSemanticAnalyzer(
-			indexes.Scheme,
+			indexes.Scheme(),
 		),
 	}, nil
 }
@@ -149,7 +160,7 @@ func (e *Executor) executeExpr(
 			}
 			return res, nil
 		case Less, LessOrEqual:
-			right := &common.Bound{
+			right := &domain.Bound{
 				Value:     ex.Value,
 				Inclusive: LessOrEqual == ex.Operator,
 			}
@@ -166,7 +177,7 @@ func (e *Executor) executeExpr(
 			}
 			return posting, nil
 		case Bigger, BiggerOrEqual:
-			left := &common.Bound{
+			left := &domain.Bound{
 				Value:     ex.Value,
 				Inclusive: BiggerOrEqual == ex.Operator,
 			}

@@ -25,6 +25,11 @@ type ProjectedField struct {
 
 type Projections []ProjectedField
 
+type ParseProjection interface {
+	Parser
+	Projection
+}
+
 func (p Projections) MarshalJSON() ([]byte, error) {
 	capacity := 2
 

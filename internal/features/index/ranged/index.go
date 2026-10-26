@@ -26,7 +26,7 @@ type localBound[K common.Key] struct {
 }
 
 func (i *Index[K]) Range(
-	from, to *common.Bound,
+	from, to *domain.Bound,
 ) (iter.Seq[domain.RecordID], error) {
 	var (
 		fromBound *localBound[K]
