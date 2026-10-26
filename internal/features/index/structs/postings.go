@@ -1,35 +1,34 @@
 package structs
 
 import (
+	"encoding/binary"
+	"errors"
+	"fmt"
 	"iter"
 	"slices"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
 )
 
-type PostingList struct {
-	posting []domain.RecordID
-}
+type PostingList []domain.RecordID
 
 func NewPostingLists(capacity int) *PostingList {
-	return &PostingList{
-		posting: make([]domain.RecordID, 0, capacity),
-	}
+	list := make(PostingList, 0, capacity)
+	return &list
 }
 
 func NewPostingFromSorted(sl []domain.RecordID) *PostingList {
-	return &PostingList{
-		posting: sl,
-	}
+	list := PostingList(sl)
+	return &list
 }
 
 func (p *PostingList) Add(id domain.RecordID) bool {
-	if len(p.posting) > 0 &&
-		p.posting[len(p.posting)-1] >= id {
+	if len(*p) > 0 &&
+		(*p)[len(*p)-1] >= id {
 		return false
 	}
 
-	p.posting = append(p.posting, id)
+	*p = append(*p, id)
 	return true
 }
 
@@ -38,14 +37,14 @@ func (p *PostingList) Contains(id domain.RecordID) bool {
 }
 
 func (p *PostingList) Index(id domain.RecordID) int {
-	left, right := 0, len(p.posting)-1
+	left, right := 0, len(*p)-1
 
 	for left <= right {
 		mid := left + (right-left)/2
 
-		if p.posting[mid] == id {
+		if (*p)[mid] == id {
 			return mid
-		} else if p.posting[mid] > id {
+		} else if (*p)[mid] > id {
 			right = mid - 1
 		} else {
 			left = mid + 1
@@ -58,27 +57,27 @@ func (p *PostingList) Index(id domain.RecordID) int {
 func (p *PostingList) Remove(id domain.RecordID) bool {
 	idx := p.Index(id)
 	if idx != -1 {
-		p.posting = slices.Delete(p.posting, idx, idx+1)
+		*p = slices.Delete(*p, idx, idx+1)
 		return true
 	}
 	return false
 }
 
 func (p *PostingList) Clear() {
-	p.posting = make([]domain.RecordID, 0)
+	*p = make([]domain.RecordID, 0)
 }
 
 func (p *PostingList) Len() int {
-	return len(p.posting)
+	return len(*p)
 }
 
 func (p *PostingList) Slice() []domain.RecordID {
-	return slices.Clone(p.posting)
+	return slices.Clone(*p)
 }
 
 func (p *PostingList) Iterator() iter.Seq[domain.RecordID] {
 	return func(yield func(domain.RecordID) bool) {
-		for _, id := range p.posting {
+		for _, id := range *p {
 			if !yield(id) {
 				return
 			}
@@ -87,9 +86,51 @@ func (p *PostingList) Iterator() iter.Seq[domain.RecordID] {
 }
 
 func (p *PostingList) At(idx int) domain.RecordID {
-	if idx > len(p.posting) ||
+	if idx > len(*p) ||
 		idx < 0 {
 		return 0
 	}
-	return p.posting[idx]
+	return (*p)[idx]
+}
+
+func (p *PostingList) MarshalBinary() ([]byte, error) {
+	data := make([]byte, len(*p)*8)
+
+	for i, post := range *p {
+		binary.BigEndian.PutUint64(
+			data[i*8:(i+1)*8],
+			uint64(post),
+		)
+	}
+
+	return data, nil
+}
+
+func (p *PostingList) UnmarshalBinary(data []byte) error {
+	if len(data)%8 != 0 {
+		return errors.New(
+			"size of elements must divide by 8",
+		)
+	}
+
+	posts := make(PostingList, len(data)/8)
+	for i := range posts {
+		id := domain.RecordID(
+			binary.BigEndian.Uint64(
+				data[i*8 : (i+1)*8],
+			),
+		)
+
+		if i > 0 && id <= posts[i-1] {
+			return fmt.Errorf(
+				"posting list must be sorted: %d",
+				id,
+			)
+		}
+
+		posts[i] = id
+	}
+
+	*p = posts
+	return nil
 }

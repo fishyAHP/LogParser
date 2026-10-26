@@ -13,12 +13,12 @@ func forEachIntersectLists(
 
 	for i < s1.Len() && j < s2.Len() {
 		switch {
-		case s1.posting[i] < s2.posting[j]:
+		case (*s1)[i] < (*s2)[j]:
 			i++
-		case s1.posting[i] > s2.posting[j]:
+		case (*s1)[i] > (*s2)[j]:
 			j++
 		default:
-			if !visit(s1.posting[i]) {
+			if !visit((*s1)[i]) {
 				return
 			}
 			i++
@@ -73,25 +73,25 @@ func UnionLists(s1, s2 *PostingList) *PostingList {
 
 	for i < s1.Len() && j < s2.Len() {
 		switch {
-		case s1.posting[i] < s2.posting[j]:
-			res.Add(s1.posting[i])
+		case (*s1)[i] < (*s2)[j]:
+			res.Add((*s1)[i])
 			i++
-		case s1.posting[i] > s2.posting[j]:
-			res.Add(s2.posting[j])
+		case (*s1)[i] > (*s2)[j]:
+			res.Add((*s2)[j])
 			j++
 		default:
-			res.Add(s1.posting[i])
+			res.Add((*s1)[i])
 			i++
 			j++
 		}
 	}
 
 	for ; i < s1.Len(); i++ {
-		res.Add(s1.posting[i])
+		res.Add((*s1)[i])
 	}
 
 	for ; j < s2.Len(); j++ {
-		res.Add(s2.posting[j])
+		res.Add((*s2)[j])
 	}
 
 	return res
@@ -104,10 +104,10 @@ func DifferenceLists(s1, s2 *PostingList) *PostingList {
 
 	for i < s1.Len() && j < s2.Len() {
 		switch {
-		case s1.posting[i] < s2.posting[j]:
-			res.Add(s1.posting[i])
+		case (*s1)[i] < (*s2)[j]:
+			res.Add((*s1)[i])
 			i++
-		case s1.posting[i] > s2.posting[j]:
+		case (*s1)[i] > (*s2)[j]:
 			j++
 		default:
 			i++
@@ -117,7 +117,7 @@ func DifferenceLists(s1, s2 *PostingList) *PostingList {
 	}
 
 	for ; i < s1.Len(); i++ {
-		res.Add(s1.posting[i])
+		res.Add((*s1)[i])
 	}
 
 	return res
