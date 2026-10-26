@@ -8,8 +8,7 @@ import (
 	"fishyAHP/LogParser.git/internal/core/domain"
 	"fishyAHP/LogParser.git/internal/features/aggregation"
 	"fishyAHP/LogParser.git/internal/features/aggregation/interfaces"
-	"fishyAHP/LogParser.git/internal/features/index"
-	"fishyAHP/LogParser.git/internal/features/parse"
+	"fishyAHP/LogParser.git/internal/features/parse/common"
 	"fishyAHP/LogParser.git/internal/features/query/execution"
 	"fishyAHP/LogParser.git/internal/features/query/iterators"
 	"fishyAHP/LogParser.git/internal/features/storage"
@@ -17,17 +16,25 @@ import (
 
 type Engine struct {
 	executor *execution.Executor
-	store    *storage.Storage
-	parser   *parse.LogParser
+
+	parser common.ParseProjection
+	store  Store
+}
+
+type Store interface {
+	Iterator() storage.Iterator
+	ReadByID(
+		record domain.RecordID,
+	) ([]byte, error)
 }
 
 func NewEngine(
-	store *storage.Storage,
-	parser *parse.LogParser,
-	indexes *index.Manager,
+	creator Store,
+	parser common.ParseProjection,
+	manager execution.IndexReader,
 	catalog *domain.FieldsCatalog,
 ) (*Engine, error) {
-	if store == nil {
+	if creator == nil {
 		return nil, errors.New(
 			"storage mustn't be nil",
 		)
@@ -39,14 +46,14 @@ func NewEngine(
 		)
 	}
 
-	exec, err := execution.NewExecutor(indexes, catalog)
+	exec, err := execution.NewExecutor(manager, catalog)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Engine{
 		executor: exec,
-		store:    store,
+		store:    creator,
 		parser:   parser,
 	}, nil
 }
@@ -68,7 +75,11 @@ func (e *Engine) Query(
 func (e *Engine) buildIterators(
 	result execution.Result,
 ) (iterators.Rows, error) {
-	rows := iterators.Scan(result.Posting, e.store)
+	rows := iterators.Scan(
+		result.Posting,
+		e.store.Iterator(),
+		e.store,
+	)
 
 	if hasAggregate(result.Fields) {
 		aggregators, err := e.buildAggregators(result.Fields)
@@ -78,7 +89,7 @@ func (e *Engine) buildIterators(
 
 		rows = iterators.Aggregate(
 			rows, aggregators,
-			e.parser, e.executor.Indexes.Scheme,
+			e.parser, e.executor.Indexes.Scheme(),
 		)
 	} else {
 		fields, err := selectFields(result.Fields)
@@ -176,7 +187,10 @@ func (e *Engine) newAggregator(
 	}
 
 	idx := slices.IndexFunc(
-		e.executor.Indexes.Scheme.Parameters,
+		e.executor.
+			Indexes.
+			Scheme().
+			Parameters,
 		func(f domain.Field) bool {
 			return f.Name == field.Field
 		},
@@ -191,7 +205,7 @@ func (e *Engine) newAggregator(
 
 	typ := e.executor.
 		Indexes.
-		Scheme.
+		Scheme().
 		Parameters[idx].
 		FieldType
 

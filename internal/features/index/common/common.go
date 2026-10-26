@@ -33,15 +33,10 @@ type ExactIndex interface {
 
 type RangeIndex interface {
 	ExactIndex
-	Range(from, to *Bound) (iter.Seq[domain.RecordID], error)
+	Range(from, to *domain.Bound) (iter.Seq[domain.RecordID], error)
 }
 
 type TextIndex interface {
 	Index
 	Search(domain.Value) (iter.Seq[domain.RecordID], error)
-}
-
-type Bound struct {
-	Value     domain.Value
-	Inclusive bool
 }

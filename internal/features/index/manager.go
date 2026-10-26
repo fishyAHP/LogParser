@@ -1,31 +1,23 @@
 package index
 
 import (
-	"errors"
 	"fmt"
 	"iter"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
+	"fishyAHP/LogParser.git/internal/core/errors"
 	"fishyAHP/LogParser.git/internal/features/aggregation/interfaces"
 	"fishyAHP/LogParser.git/internal/features/index/common"
 )
 
-var (
-	ErrIndexNotFound       = errors.New("index wasn't found")
-	ErrUnsupportedOperator = errors.New("unsupported operator")
-	ErrUnknownIndexType    = errors.New("unknown index type in field")
-	ErrNotGrouper          = errors.New("index doesn't support grouping")
-	ErrNotAggregator       = errors.New("index doesn't support aggregating")
-)
-
 type Manager struct {
-	Scheme  *domain.Scheme
+	scheme  *domain.Scheme
 	indexes map[string]common.Index
 }
 
 func New(scheme *domain.Scheme) (*Manager, error) {
 	service := &Manager{
-		Scheme:  scheme,
+		scheme:  scheme,
 		indexes: make(map[string]common.Index, len(scheme.Parameters)),
 	}
 
@@ -54,24 +46,28 @@ func newFieldIndex(field domain.Field) (common.Index, error) {
 	case domain.RangeIndex:
 		return newRangeIndex(field.FieldType)
 	default:
-		return nil, ErrUnknownIndexType
+		return nil, coreerrors.ErrUnknownIndexType
 	}
+}
+
+func (m *Manager) Scheme() *domain.Scheme {
+	return m.scheme
 }
 
 func (m *Manager) Index(
 	record domain.RecordID,
 	entry domain.LogEntry,
 ) error {
-	if len(entry.Values) != len(m.Scheme.Parameters) {
+	if len(entry.Values) != len(m.scheme.Parameters) {
 		return fmt.Errorf(
 			"entry values count doesn't match Scheme: got %d, want %d",
 			len(entry.Values),
-			len(m.Scheme.Parameters),
+			len(m.scheme.Parameters),
 		)
 	}
 
 	for i, value := range entry.Values {
-		field := m.Scheme.Parameters[i]
+		field := m.scheme.Parameters[i]
 
 		if idx, ok := m.indexes[field.Name]; ok {
 			if err := idx.Add(value, record); err != nil {
@@ -91,14 +87,14 @@ func (m *Manager) Exact(
 ) (iter.Seq[domain.RecordID], error) {
 	idx, ok := m.indexes[fieldName]
 	if !ok {
-		return nil, ErrIndexNotFound
+		return nil, coreerrors.ErrIndexNotFound
 	}
 
 	exact, ok := idx.(common.ExactIndex)
 	if !ok {
 		return nil, fmt.Errorf(
 			"%w: want ExactIndex, got %T",
-			ErrUnsupportedOperator,
+			coreerrors.ErrUnsupportedOperator,
 			idx,
 		)
 	}
@@ -112,18 +108,18 @@ func (m *Manager) Exact(
 
 func (m *Manager) Range(
 	fieldName string,
-	from, to *common.Bound,
+	from, to *domain.Bound,
 ) (iter.Seq[domain.RecordID], error) {
 	idx, ok := m.indexes[fieldName]
 	if !ok {
-		return nil, ErrIndexNotFound
+		return nil, coreerrors.ErrIndexNotFound
 	}
 
 	rangeIdx, ok := idx.(common.RangeIndex)
 	if !ok {
 		return nil, fmt.Errorf(
 			"%w: want RangeIndex, got %T",
-			ErrUnsupportedOperator,
+			coreerrors.ErrUnsupportedOperator,
 			idx,
 		)
 	}
@@ -143,7 +139,7 @@ func (m *Manager) Grouper(
 	if !ok {
 		return nil, fmt.Errorf(
 			"%w: %q",
-			ErrIndexNotFound,
+			coreerrors.ErrIndexNotFound,
 			name,
 		)
 	}
@@ -152,7 +148,7 @@ func (m *Manager) Grouper(
 	if !ok {
 		return nil, fmt.Errorf(
 			"%w: %q",
-			ErrNotGrouper,
+			coreerrors.ErrNotGrouper,
 			name,
 		)
 	}
@@ -167,7 +163,7 @@ func (m *Manager) Aggregator(
 	if !ok {
 		return nil, fmt.Errorf(
 			"%w: %q",
-			ErrIndexNotFound,
+			coreerrors.ErrIndexNotFound,
 			name,
 		)
 	}
@@ -176,7 +172,7 @@ func (m *Manager) Aggregator(
 	if !ok {
 		return nil, fmt.Errorf(
 			"%w: %q",
-			ErrNotGrouper,
+			coreerrors.ErrNotGrouper,
 			name,
 		)
 	}

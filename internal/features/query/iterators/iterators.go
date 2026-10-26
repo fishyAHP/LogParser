@@ -16,15 +16,19 @@ import (
 
 type Rows = iter.Seq2[[]byte, error]
 
+type Reader interface {
+	ReadByID(
+		record domain.RecordID,
+	) ([]byte, error)
+}
+
 func Scan(
 	posting iter.Seq[domain.RecordID],
-	store *storage.Storage,
+	iterator storage.Iterator,
+	store Reader,
 ) Rows {
 	return func(yield func([]byte, error) bool) {
 		if posting == nil {
-			iterator := store.Iterator()
-			defer iterator.Close()
-
 			for iterator.Next() {
 				if !yield(bytes.Clone(iterator.Data()), nil) {
 					return
@@ -48,7 +52,11 @@ func Scan(
 			}
 
 			if err != nil {
-				yield(nil, fmt.Errorf("read record %v: %w", id, err))
+				yield(nil, fmt.Errorf(
+					"read record %v: %w",
+					id,
+					err,
+				))
 				return
 			}
 

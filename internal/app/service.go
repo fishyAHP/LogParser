@@ -24,6 +24,13 @@ type Service struct {
 	catalog *domain.FieldsCatalog
 }
 
+type IndexManager interface {
+	Index(
+		record domain.RecordID,
+		entry domain.LogEntry,
+	) error
+}
+
 func NewService(
 	scheme *domain.Scheme,
 	format domain.Format,
@@ -153,17 +160,26 @@ func (s *Service) rebuildMetadata() error {
 func (s *Service) Ingest(raw []byte) error {
 	parsed, err := s.parser.Parse(raw)
 	if err != nil {
-		return fmt.Errorf("parse raw byte: %w", err)
+		return fmt.Errorf(
+			"parse raw byte: %w",
+			err,
+		)
 	}
 
 	// TODO: storage write may succeed, but index failed, need rollback/WAL
 	record, err := s.store.Write(raw)
 	if err != nil {
-		return fmt.Errorf("storage write: %w", err)
+		return fmt.Errorf(
+			"storage write: %w",
+			err,
+		)
 	}
 
 	if err = s.index.Index(record, parsed.Entry); err != nil {
-		return fmt.Errorf("indexing log: %w", err)
+		return fmt.Errorf(
+			"indexing log: %w",
+			err,
+		)
 	}
 
 	s.catalog.Add(parsed.Fields...)
@@ -217,7 +233,10 @@ func (s *Service) Query(q string) (iterators.Rows, error) {
 func (s *Service) Close() error {
 	err := s.store.Close()
 	if err != nil {
-		return fmt.Errorf("storage close: %w", err)
+		return fmt.Errorf(
+			"storage close: %w",
+			err,
+		)
 	}
 
 	return nil
