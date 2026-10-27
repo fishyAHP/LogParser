@@ -99,7 +99,7 @@ func (i *Index[K]) UnmarshalBinary(
 		)
 	}
 
-	idx := indexbin.RecordsCountSize + indexbin.EntriesCountSize
+	idx := indexbin.HeaderSize
 	var actualCount uint64
 
 	for range header.EntriesCount {

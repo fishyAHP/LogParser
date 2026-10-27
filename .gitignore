@@ -7,3 +7,4 @@ limit_heap.pprof
 old_heap.pprof
 query_heap.pprof
 arch.jsonl
+./internal/features
