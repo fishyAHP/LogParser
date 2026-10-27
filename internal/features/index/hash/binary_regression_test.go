@@ -8,11 +8,12 @@ import (
 	"testing"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
+	"fishyAHP/LogParser.git/internal/features/index/binary"
 )
 
 // Формируем snapshot вручную, чтобы проверять
 // ситуации, которые обычный MarshalBinary не создаёт.
-func makeTestSnapshot(t *testing.T, entries ...BinaryEntry) []byte {
+func makeTestSnapshot(t *testing.T, entries ...indexbin.BinaryEntry) []byte {
 	t.Helper()
 
 	var buf bytes.Buffer
@@ -35,7 +36,7 @@ func makeTestSnapshot(t *testing.T, entries ...BinaryEntry) []byte {
 	return buf.Bytes()
 }
 
-func makeTestEntry(t *testing.T, key string, ids ...uint64) BinaryEntry {
+func makeTestEntry(t *testing.T, key string, ids ...uint64) indexbin.BinaryEntry {
 	t.Helper()
 
 	posting := testPosting(t, ids...)
@@ -44,7 +45,7 @@ func makeTestEntry(t *testing.T, key string, ids ...uint64) BinaryEntry {
 		t.Fatal(err)
 	}
 
-	return BinaryEntry{
+	return indexbin.BinaryEntry{
 		KeyLength:    uint32(len(key)),
 		Key:          []byte(key),
 		RecordsCount: uint64(len(ids)),
@@ -159,72 +160,6 @@ func TestIndexBinaryInvalidKeyEncoding(t *testing.T) {
 			t.Fatal("expected invalid float length error")
 		}
 	})
-}
-
-func TestBinaryEntryMarshalInvalid(t *testing.T) {
-	tests := []struct {
-		name  string
-		entry BinaryEntry
-	}{
-		{
-			name: "incorrect key length",
-			entry: BinaryEntry{
-				KeyLength: 10,
-				Key:       []byte("ABC"),
-			},
-		},
-		{
-			name: "incorrect records count",
-			entry: BinaryEntry{
-				KeyLength:    1,
-				Key:          []byte("A"),
-				RecordsCount: 2,
-				Records:      make([]byte, 8),
-			},
-		},
-		{
-			name: "partial record",
-			entry: BinaryEntry{
-				KeyLength:    1,
-				Key:          []byte("A"),
-				RecordsCount: 1,
-				Records:      make([]byte, 9),
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if _, err := tt.entry.MarshalBinary(); err == nil {
-				t.Fatal("expected validation error")
-			}
-		})
-	}
-}
-
-func TestBinaryEntryEmptyRoundTrip(t *testing.T) {
-	original := BinaryEntry{}
-
-	data, err := original.MarshalBinary()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if len(data) != 12 {
-		t.Fatalf("expected 12 bytes, got %d", len(data))
-	}
-
-	var restored BinaryEntry
-	if err := restored.UnmarshalBinary(data); err != nil {
-		t.Fatal(err)
-	}
-
-	if restored.KeyLength != 0 ||
-		restored.RecordsCount != 0 ||
-		len(restored.Key) != 0 ||
-		len(restored.Records) != 0 {
-		t.Fatalf("unexpected entry: %+v", restored)
-	}
 }
 
 func TestIndexBinaryLargePosting(t *testing.T) {

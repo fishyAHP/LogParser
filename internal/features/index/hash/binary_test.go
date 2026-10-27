@@ -127,7 +127,9 @@ func TestIndexBinaryEmpty(t *testing.T) {
 
 	restored := New[domain.StringValue]()
 
-	if err := restored.UnmarshalBinary(data); err != nil {
+	if err := restored.UnmarshalBinary(
+		data,
+	); err != nil {
 		t.Fatal(err)
 	}
 
@@ -139,7 +141,10 @@ func TestIndexBinaryEmpty(t *testing.T) {
 	}
 
 	if restored.count != 0 {
-		t.Errorf("expected zero count, got %d", restored.count)
+		t.Errorf(
+			"expected zero count, got %d",
+			restored.count,
+		)
 	}
 }
 
@@ -161,8 +166,9 @@ func TestIndexUnmarshalTruncated(t *testing.T) {
 			func(t *testing.T) {
 				restored := New[domain.StringValue]()
 
-				err := restored.UnmarshalBinary(data[:size])
-				if err == nil {
+				if err := restored.UnmarshalBinary(
+					data[:size],
+				); err == nil {
 					t.Fatalf(
 						"expected error for truncated data of length %d",
 						size,
@@ -205,50 +211,5 @@ func TestIndexUnmarshalPreservesStateOnError(t *testing.T) {
 
 	if !reflect.DeepEqual(posting, before) {
 		t.Fatal("existing posting list changed")
-	}
-}
-
-func TestBinaryEntryInvalidData(t *testing.T) {
-	tests := []struct {
-		name string
-		data []byte
-	}{
-		{
-			name: "empty",
-			data: nil,
-		},
-		{
-			name: "short key length",
-			data: []byte{0, 0, 0},
-		},
-		{
-			name: "key length exceeds data",
-			data: []byte{0, 0, 0, 100},
-		},
-		{
-			name: "missing records count",
-			data: []byte{
-				0, 0, 0, 1,
-				'A',
-			},
-		},
-		{
-			name: "missing records",
-			data: []byte{
-				0, 0, 0, 1,
-				'A',
-				0, 0, 0, 0, 0, 0, 0, 2,
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var entry BinaryEntry
-
-			if err := entry.UnmarshalBinary(tt.data); err == nil {
-				t.Fatal("expected error")
-			}
-		})
 	}
 }

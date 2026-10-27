@@ -249,7 +249,8 @@ func (t *rbTree[K]) rangeSearch(
 				return true
 			}
 
-			if from == nil || t.compare(nod1.key, from.value) > 0 {
+			if from == nil ||
+				t.compare(nod1.key, from.value) > 0 {
 				if !walk(nod1.left) {
 					return false
 				}
@@ -261,7 +262,8 @@ func (t *rbTree[K]) rangeSearch(
 				}
 			}
 
-			if to == nil || t.compare(n.key, to.value) < 0 {
+			if to == nil ||
+				t.compare(nod1.key, to.value) < 0 {
 				if !walk(nod1.right) {
 					return false
 				}
@@ -340,6 +342,7 @@ func (t *rbTree[K]) clear() {
 	t.nodesCount = 0
 }
 
+// TODO need to complete remove when will start delete from storage
 func (t *rbTree[K]) remove(key K, value domain.RecordID) bool {
 	return false
 }
@@ -355,79 +358,71 @@ func (t *rbTree[K]) extremum(
 	posting *structs.PostingList,
 	direction direction,
 ) (domain.Value, error) {
-	stack := make([]*node[K], 0, t.height())
-	current := t.root
 
-	for current != nil ||
-		len(stack) != 0 {
-
-		for current != nil {
-			stack = append(stack, current)
-
-			switch direction {
-			case ascending:
-				current = current.left
-			case descending:
-				current = current.right
-			}
-		}
-
-		current = stack[len(stack)-1]
-		stack = stack[:len(stack)-1]
-
+	for nod := range t.traverse(direction) {
 		if structs.IsListIntersects(
-			current.records.toPosting(),
+			nod.records.toPosting(),
 			posting,
 		) {
-			return current.key, nil
-		}
-
-		switch direction {
-		case ascending:
-			current = current.right
-		case descending:
-			current = current.left
+			return nod.key, nil
 		}
 	}
 
 	return nil, common.ErrRecordNotFound
 }
 
+func (t *rbTree[K]) traverse(
+	direction direction,
+) iter.Seq[*node[K]] {
+	return func(yield func(*node[K]) bool) {
+		stack := make([]*node[K], 0, t.height())
+		current := t.root
+
+		for current != nil ||
+			len(stack) != 0 {
+
+			for current != nil {
+				stack = append(stack, current)
+
+				switch direction {
+				case ascending:
+					current = current.left
+				case descending:
+					current = current.right
+				}
+			}
+
+			current = stack[len(stack)-1]
+			stack = stack[:len(stack)-1]
+
+			if !yield(current) {
+				return
+			}
+
+			switch direction {
+			case ascending:
+				current = current.right
+			case descending:
+				current = current.left
+			}
+		}
+	}
+}
+
 func (t *rbTree[K]) forEach(
 	posting *structs.PostingList,
-	visit func(
-		value domain.Value,
-		count int,
-	) bool) {
-	if t.root == nil {
-		return
-	}
-
-	queue := append(
-		make([]*node[K], 0, t.height()),
-		t.root,
-	)
-
-	for len(queue) > 0 {
-		front := queue[0]
-		queue = queue[1:]
-
+	visit func(domain.Value, int) bool,
+) {
+	for n := range t.traverse(ascending) {
 		matches := structs.CountListIntersections(
-			front.records.toPosting(),
+			n.records.toPosting(),
 			posting,
 		)
 
 		if matches > 0 {
-			if !visit(front.key, matches) {
+			if !visit(n.key, matches) {
 				return
 			}
-		}
-
-		if front.left != nil {
-			queue = append(queue, front.left)
-		}
-		if front.right != nil {
-			queue = append(queue, front.right)
 		}
 	}
 }

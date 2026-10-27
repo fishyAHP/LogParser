@@ -3,183 +3,17 @@ package hash
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math"
-	"time"
 
-	"fishyAHP/LogParser.git/internal/core/domain"
-	"fishyAHP/LogParser.git/internal/features/index/common"
+	"fishyAHP/LogParser.git/internal/features/index/binary"
 	"fishyAHP/LogParser.git/internal/features/index/structs"
 )
 
-type BinaryEntry struct {
-	KeyLength    uint32
-	Key          []byte
-	RecordsCount uint64
-	Records      []byte
-}
-
-const (
-	keyLengthSize = 4
-	entriesCountSize
-	recordsCountSize = 8
-)
-
-func (b BinaryEntry) validate() error {
-	if uint64(len(b.Key)) !=
-		uint64(b.KeyLength) {
-		return fmt.Errorf(
-			"len of key not consistently: %d and %d",
-			len(b.Key),
-			b.KeyLength,
-		)
-	}
-
-	if len(b.Records)%8 != 0 ||
-		uint64(len(b.Records)/8) !=
-			b.RecordsCount {
-		return fmt.Errorf(
-			"records count not consistently: %d and %d",
-			uint64(len(b.Records)/8),
-			b.RecordsCount,
-		)
-	}
-
-	return nil
-}
-
-func (b BinaryEntry) MarshalBinary() ([]byte, error) {
-	if err := b.validate(); err != nil {
-		return nil, fmt.Errorf(
-			"binary entry validate: %w",
-			err,
-		)
-	}
-
-	var buf bytes.Buffer
-	buf.Grow(
-		keyLengthSize +
-			len(b.Key) +
-			recordsCountSize +
-			len(b.Records),
-	)
-
-	if err := binary.Write(
-		&buf,
-		binary.BigEndian,
-		b.KeyLength,
-	); err != nil {
-		return nil, fmt.Errorf(
-			"binary write key length: %w",
-			err,
-		)
-	}
-
-	if _, err := buf.Write(b.Key); err != nil {
-		return nil, fmt.Errorf(
-			"buffer write key: %w",
-			err,
-		)
-	}
-
-	if err := binary.Write(
-		&buf,
-		binary.BigEndian,
-		b.RecordsCount,
-	); err != nil {
-		return nil, fmt.Errorf(
-			"binary write records count: %w",
-			err,
-		)
-	}
-
-	if _, err := buf.Write(b.Records); err != nil {
-		return nil, fmt.Errorf(
-			"buffer write records: %w",
-			err,
-		)
-	}
-
-	return buf.Bytes(), nil
-}
-
-func (b *BinaryEntry) UnmarshalBinary(
-	data []byte,
-) error {
-	dataLength := len(data)
-	if keyLengthSize > dataLength {
-		return fmt.Errorf(
-			"key size must be shorter than data: %d",
-			keyLengthSize,
-		)
-	}
-
-	keyLength := binary.BigEndian.Uint32(
-		data[:keyLengthSize],
-	)
-
-	if uint64(keyLength) > uint64(dataLength-keyLengthSize) {
-		return fmt.Errorf(
-			"invalid ley length: %d",
-			keyLength,
-		)
-	}
-	keyEnd := keyLengthSize + int(keyLength)
-	if dataLength-keyEnd < recordsCountSize {
-		return fmt.Errorf(
-			"truncated records count: %d",
-			keyEnd+dataLength,
-		)
-	}
-
-	key := data[keyLengthSize:keyEnd]
-	recordsCountEnd := keyEnd + recordsCountSize
-
-	if recordsCountEnd > len(data) {
-		return fmt.Errorf(
-			"end of records count more than len data: %d",
-			recordsCountEnd,
-		)
-	}
-
-	recordsCount := binary.BigEndian.Uint64(
-		data[keyEnd:recordsCountEnd],
-	)
-
-	if recordsCount > uint64(
-		(dataLength-recordsCountEnd)/8,
-	) {
-		return fmt.Errorf(
-			"invalid records count: %d",
-			recordsCount,
-		)
-	}
-
-	recordsEnd := recordsCountEnd + int(recordsCount)*8
-	records := data[recordsCountEnd:recordsEnd]
-
-	tmp := BinaryEntry{
-		KeyLength:    keyLength,
-		Key:          key,
-		RecordsCount: recordsCount,
-		Records:      records,
-	}
-
-	if err := tmp.validate(); err != nil {
-		return fmt.Errorf(
-			"binary entry validate: %w",
-			err,
-		)
-	}
-
-	*b = tmp
-
-	return nil
-}
-
 func (i *Index[K]) MarshalBinary() ([]byte, error) {
 	if uint64(len(i.idx)) > math.MaxUint32 {
-		return nil, fmt.Errorf("too many index entries")
+		return nil, errors.New("too many index entries")
 	}
 
 	var buf bytes.Buffer
@@ -206,12 +40,12 @@ func (i *Index[K]) MarshalBinary() ([]byte, error) {
 	}
 
 	for key, posting := range i.idx {
-		keyData, err := encodeKey(key)
+		keyData, err := indexbin.EncodeKey(key)
 		if err != nil {
 			return nil, err
 		}
 		if uint64(len(keyData)) > math.MaxUint32 {
-			return nil, fmt.Errorf("too many index entries")
+			return nil, errors.New("too many index entries")
 		}
 
 		postData, err := posting.MarshalBinary()
@@ -219,7 +53,7 @@ func (i *Index[K]) MarshalBinary() ([]byte, error) {
 			return nil, err
 		}
 
-		entry := BinaryEntry{
+		entry := indexbin.BinaryEntry{
 			KeyLength:    uint32(len(keyData)),
 			Key:          keyData,
 			RecordsCount: uint64(posting.Len()),
@@ -248,7 +82,7 @@ func (i *Index[K]) MarshalBinary() ([]byte, error) {
 func (i *Index[K]) UnmarshalBinary(
 	data []byte,
 ) error {
-	if len(data) < recordsCountSize {
+	if len(data) < indexbin.RecordsCountSize {
 		return fmt.Errorf(
 			"records count overflow data: %d",
 			len(data),
@@ -257,22 +91,22 @@ func (i *Index[K]) UnmarshalBinary(
 
 	tmp := New[K]()
 	count := binary.BigEndian.Uint64(
-		data[:recordsCountSize],
+		data[:indexbin.RecordsCountSize],
 	)
-	offset := recordsCountSize
+	offset := indexbin.RecordsCountSize
 
-	if len(data) < offset+entriesCountSize {
+	if len(data) < offset+indexbin.EntriesCountSize {
 		return fmt.Errorf(
 			"entries count overflow data: %d and %d",
 			len(data),
-			offset+entriesCountSize,
+			offset+indexbin.EntriesCountSize,
 		)
 	}
 	entriesCount := binary.BigEndian.Uint32(
-		data[offset : offset+entriesCountSize],
+		data[offset : offset+indexbin.EntriesCountSize],
 	)
 
-	offset += entriesCountSize
+	offset += indexbin.EntriesCountSize
 	idx := offset
 
 	if uint64(entriesCount) >
@@ -284,7 +118,7 @@ func (i *Index[K]) UnmarshalBinary(
 	}
 
 	for range entriesCount {
-		var entry BinaryEntry
+		var entry indexbin.BinaryEntry
 
 		if err := entry.UnmarshalBinary(
 			data[idx:],
@@ -295,7 +129,7 @@ func (i *Index[K]) UnmarshalBinary(
 			)
 		}
 
-		key, err := decodeKey[K](
+		key, err := indexbin.DecodeKey[K](
 			entry.Key,
 		)
 		if err != nil {
@@ -325,9 +159,9 @@ func (i *Index[K]) UnmarshalBinary(
 		}
 
 		tmp.idx[key] = postings
-		size := keyLengthSize +
+		size := indexbin.KeyLengthSize +
 			len(entry.Key) +
-			recordsCountSize +
+			indexbin.RecordsCountSize +
 			len(entry.Records)
 
 		idx += size
@@ -346,132 +180,4 @@ func (i *Index[K]) UnmarshalBinary(
 	}
 
 	return nil
-}
-
-func encodeKey[K common.Key](
-	key K,
-) ([]byte, error) {
-	switch k := any(key).(type) {
-	case domain.StringValue:
-		return []byte(k), nil
-
-	case domain.IntValue:
-		data := make([]byte, 8)
-		binary.BigEndian.PutUint64(
-			data,
-			uint64(k),
-		)
-
-		return data, nil
-
-	case domain.FloatValue:
-		data := make([]byte, 8)
-		binary.BigEndian.PutUint64(
-			data,
-			math.Float64bits(float64(k)),
-		)
-
-		return data, nil
-
-	case domain.TimeValue:
-		t := time.Time(k)
-		data, err := t.MarshalBinary()
-		if err != nil {
-			return nil, fmt.Errorf(
-				"time marshal binary: %w",
-				err,
-			)
-		}
-
-		return data, nil
-	case domain.BoolValue:
-		if k {
-			return []byte{1}, nil
-		}
-		return []byte{0}, nil
-
-	default:
-		return nil, fmt.Errorf(
-			"unsupported key type: %T",
-			key,
-		)
-	}
-}
-
-func decodeKey[K common.Key](
-	data []byte,
-) (K, error) {
-	var zero K
-
-	switch k := any(zero).(type) {
-	case domain.StringValue:
-		return any(domain.StringValue(data)).(K), nil
-
-	case domain.IntValue:
-		if len(data) != 8 {
-			return zero, fmt.Errorf(
-				"invalid int key length: %d",
-				len(data),
-			)
-		}
-
-		value := domain.IntValue(
-			binary.BigEndian.Uint64(data),
-		)
-		return any(value).(K), nil
-
-	case domain.FloatValue:
-		if len(data) != 8 {
-			return zero, fmt.Errorf(
-				"invalid float key value: %d",
-				len(data),
-			)
-		}
-
-		bits := binary.BigEndian.Uint64(data)
-		value := domain.FloatValue(
-			math.Float64frombits(bits),
-		)
-
-		return any(value).(K), nil
-
-	case domain.TimeValue:
-		var t time.Time
-
-		if err := t.UnmarshalBinary(
-			data,
-		); err != nil {
-			return zero, fmt.Errorf(
-				"time binary unmarshal: %w",
-				err,
-			)
-		}
-
-		return any(domain.TimeValue(t)).(K), nil
-
-	case domain.BoolValue:
-		if len(data) != 1 {
-			return zero, fmt.Errorf(
-				"invalid bool key length: %d",
-				len(data),
-			)
-		}
-
-		switch data[0] {
-		case 0:
-			return any(domain.BoolValue(false)).(K), nil
-		case 1:
-			return any(domain.BoolValue(true)).(K), nil
-		default:
-			return zero, fmt.Errorf(
-				"unexpected bool key value: %d",
-				data[0],
-			)
-		}
-	default:
-		return zero, fmt.Errorf(
-			"unsupported key type: %T",
-			k,
-		)
-	}
 }

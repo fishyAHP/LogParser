@@ -29,7 +29,7 @@ func FuzzIndexUnmarshalBinary(f *testing.F) {
 		}
 
 		restored := New[domain.StringValue]()
-		if err := restored.UnmarshalBinary(encoded); err != nil {
+		if err = restored.UnmarshalBinary(encoded); err != nil {
 			t.Fatalf("second unmarshal: %v", err)
 		}
 	})
