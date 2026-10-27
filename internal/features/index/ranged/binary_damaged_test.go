@@ -210,3 +210,35 @@ func TestRangeIndexBinaryPreserveOnCorruption(t *testing.T) {
 		})
 	}
 }
+
+func TestRangeIndexBinaryRejectZeroRecordID(t *testing.T) {
+	idx := New(cmp.Compare[domain.IntValue])
+
+	if err := idx.Add(domain.IntValue(42), 1); err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := idx.MarshalBinary()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Header: 12 bytes
+	// KeyLength: 4 bytes
+	// IntValue key: 8 bytes
+	// RecordsCount: 8 bytes
+	recordOffset := indexbin.HeaderSize +
+		indexbin.KeyLengthSize + 8 +
+		indexbin.RecordsCountSize
+
+	binary.BigEndian.PutUint64(
+		data[recordOffset:recordOffset+8],
+		0,
+	)
+
+	restored := New(cmp.Compare[domain.IntValue])
+
+	if err := restored.UnmarshalBinary(data); err == nil {
+		t.Fatal("expected error for RecordID(0)")
+	}
+}

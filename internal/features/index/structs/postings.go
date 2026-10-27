@@ -23,6 +23,9 @@ func NewPostingFromSorted(sl []domain.RecordID) *PostingList {
 }
 
 func (p *PostingList) Add(id domain.RecordID) bool {
+	if id == 0 {
+		return false
+	}
 	if len(*p) > 0 &&
 		(*p)[len(*p)-1] >= id {
 		return false
@@ -120,6 +123,13 @@ func (p *PostingList) UnmarshalBinary(data []byte) error {
 				data[i*8 : (i+1)*8],
 			),
 		)
+
+		if id <= 0 {
+			return fmt.Errorf(
+				"invalid record id: %d",
+				id,
+			)
+		}
 
 		if i > 0 && id <= posts[i-1] {
 			return fmt.Errorf(
