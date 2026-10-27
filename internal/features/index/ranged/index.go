@@ -120,7 +120,7 @@ func (i *Index[K]) maxNode() iter.Seq[domain.RecordID] {
 }
 
 func (i *Index[K]) Len() int {
-	return i.tree.elemsCount
+	return int(i.tree.elemsCount)
 }
 
 func (i *Index[K]) Clear() {
