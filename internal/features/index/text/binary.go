@@ -1,7 +1,6 @@
 package text
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"math"
@@ -14,33 +13,16 @@ import (
 )
 
 func (i *Index) MarshalBinary() ([]byte, error) {
+	if i.count < 0 {
+		return nil, fmt.Errorf(
+			"negative records count: %d",
+			i.count,
+		)
+	}
+
 	if uint64(len(i.invert)) > math.MaxUint32 {
-		return nil, fmt.Errorf(
-			"entries count overflowed: %d",
-			len(i.invert),
-		)
-	}
-
-	header := indexbin.Header{
-		RecordsCount: uint64(i.count),
-		EntriesCount: uint32(len(i.invert)),
-	}
-
-	headerData, err := header.MarshalBinary()
-	if err != nil {
-		return nil, fmt.Errorf(
-			"text index header binary marshal: %w",
-			err,
-		)
-	}
-
-	var buf bytes.Buffer
-	if _, err = buf.Write(
-		headerData,
-	); err != nil {
-		return nil, fmt.Errorf(
-			"buffer write header data: %w",
-			err,
+		return nil, errors.New(
+			"entries count overflow",
 		)
 	}
 
@@ -51,176 +33,74 @@ func (i *Index) MarshalBinary() ([]byte, error) {
 
 	slices.Sort(tokens)
 
-	var actual int
-	for _, token := range tokens {
-		tokenData := []byte(token)
-
-		posting := i.invert[token]
-		if posting == nil ||
-			posting.Len() == 0 {
-			return nil, fmt.Errorf(
-				"empty posting for token %q",
-				token,
-			)
-		}
-
-		postData, err := posting.MarshalBinary()
-		if err != nil {
-			return nil, fmt.Errorf(
-				"posting marshal binary: %w",
-				err,
-			)
-		}
-
-		actual += posting.Len()
-
-		entry := indexbin.BinaryEntry{
-			KeyLength:    uint32(len(tokenData)),
-			Key:          tokenData,
-			RecordsCount: uint64(posting.Len()),
-			Records:      postData,
-		}
-
-		data, err := entry.MarshalBinary()
-		if err != nil {
-			return nil, fmt.Errorf(
-				"entry binary marshal: %w",
-				err,
-			)
-		}
-
-		if _, err = buf.Write(
-			data,
-		); err != nil {
-			return nil, fmt.Errorf(
-				"buffer write entry data: %w",
-				err,
-			)
-		}
-	}
-
-	if actual != i.count {
-		return nil, fmt.Errorf(
-			"records count not consistently: %d and %d",
-			actual,
-			i.count,
-		)
-	}
-
-	return buf.Bytes(), nil
+	return indexbin.MarshalIndex(
+		uint64(i.count),
+		uint32(len(i.invert)),
+		func(yield func(
+			words.Token,
+			*structs.PostingList,
+		) bool) {
+			for _, token := range tokens {
+				if !yield(token, i.invert[token]) {
+					return
+				}
+			}
+		},
+		func(token words.Token) ([]byte, error) {
+			return []byte(token), nil
+		},
+	)
 }
 
-func (i *Index) UnmarshalBinary(
-	data []byte,
-) error {
-	if len(data) < indexbin.HeaderSize {
-		return fmt.Errorf(
-			"data dont accommodate header: got %d, want %d",
-			len(data),
-			indexbin.HeaderSize,
-		)
-	}
-
-	var header indexbin.Header
-	if err := header.UnmarshalBinary(
-		data,
-	); err != nil {
-		return fmt.Errorf(
-			"text index header binary unmarshal: %w",
-			err,
-		)
-	}
-
+func (i *Index) UnmarshalBinary(data []byte) error {
 	tmp := Index{
 		invert:    make(invertIndex),
 		Tokenizer: i.Tokenizer,
 	}
 
-	idx := indexbin.HeaderSize
-	var actualCount uint64
-	for range header.EntriesCount {
-		var entry indexbin.BinaryEntry
-		if err := entry.UnmarshalBinary(
-			data[idx:],
-		); err != nil {
-			return fmt.Errorf(
-				"entry binary unmarshal: %w",
-				err,
-			)
-		}
+	header, err := indexbin.UnmarshalIndex(
+		data,
+		func(data []byte) (words.Token, error) {
+			key, err := indexbin.DecodeKey[domain.StringValue](data)
+			if err != nil {
+				return "", fmt.Errorf(
+					"decode token: %w",
+					err,
+				)
+			}
+			return words.Token(key), nil
+		},
+		func(
+			token words.Token,
+			posting *structs.PostingList,
+		) error {
+			if _, exists := tmp.invert[token]; exists {
+				return fmt.Errorf(
+					"duplicate token %q",
+					token,
+				)
+			}
 
-		key, err := indexbin.DecodeKey[domain.StringValue](
-			entry.Key,
-		)
-		if err != nil {
-			return fmt.Errorf(
-				"decode string key: %w",
-				err,
-			)
-		}
+			tmp.invert[token] = posting
+			return nil
+		},
+	)
 
-		if entry.RecordsCount == 0 {
-			return fmt.Errorf(
-				"empty posting list for token %q",
-				key,
-			)
-		}
-
-		posting := structs.NewPostingLists(
-			int(entry.RecordsCount),
-		)
-
-		if err = posting.UnmarshalBinary(
-			entry.Records,
-		); err != nil {
-			return fmt.Errorf(
-				"posting with key='%s' unmarshal: %w",
-				key,
-				err,
-			)
-		}
-
-		token := words.Token(key)
-		if _, ok := tmp.invert[token]; ok {
-			return fmt.Errorf(
-				"key '%s' already exist",
-				token,
-			)
-		}
-
-		tmp.invert[token] = posting
-
-		size := indexbin.KeyLengthSize +
-			len(entry.Key) +
-			indexbin.RecordsCountSize +
-			len(entry.Records)
-
-		if entry.RecordsCount > header.RecordsCount-actualCount {
-			return errors.New(
-				"records count exceeds header",
-			)
-		}
-
-		actualCount += entry.RecordsCount
-		idx += size
-	}
-
-	if idx != len(data) {
+	if err != nil {
 		return fmt.Errorf(
-			"unexpected trailing data: %d bytes",
-			len(data)-idx,
+			"text index unmarshal: %w",
+			err,
 		)
 	}
 
-	if actualCount != header.RecordsCount {
+	if header.RecordsCount > uint64(math.MaxInt) {
 		return fmt.Errorf(
-			"records count mismatch: expected %d, got %d",
+			"records count exceeds int: %d",
 			header.RecordsCount,
-			actualCount,
 		)
 	}
 
-	tmp.count = int(actualCount)
+	tmp.count = int(header.RecordsCount)
 	*i = tmp
 
 	return nil
