@@ -200,7 +200,6 @@ func (i *Index) UnmarshalBinary(
 				"records count exceeds header",
 			)
 		}
-		actualCount += entry.RecordsCount
 
 		actualCount += entry.RecordsCount
 		idx += size
@@ -221,6 +220,7 @@ func (i *Index) UnmarshalBinary(
 		)
 	}
 
+	tmp.count = int(actualCount)
 	*i = tmp
 
 	return nil
