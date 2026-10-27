@@ -2,37 +2,34 @@ package ranged
 
 import (
 	"bytes"
-	"encoding/binary"
-	"errors"
 	"fmt"
 	"math"
 
 	indexbin "fishyAHP/LogParser.git/internal/features/index/binary"
-	"fishyAHP/LogParser.git/internal/features/index/common"
 	"fishyAHP/LogParser.git/internal/features/index/structs"
 )
 
 func (i *Index[K]) MarshalBinary() ([]byte, error) {
 	var buf bytes.Buffer
 
-	if err := binary.Write(
-		&buf,
-		binary.BigEndian,
-		i.tree.elemsCount,
-	); err != nil {
+	header := indexbin.Header{
+		RecordsCount: i.tree.elemsCount,
+		EntriesCount: i.tree.nodesCount,
+	}
+
+	headerData, err := header.MarshalBinary()
+	if err != nil {
 		return nil, fmt.Errorf(
-			"binary write range index elems count: %w",
+			"index header marshal binary: %w",
 			err,
 		)
 	}
 
-	if err := binary.Write(
-		&buf,
-		binary.BigEndian,
-		i.tree.nodesCount,
+	if _, err = buf.Write(
+		headerData,
 	); err != nil {
 		return nil, fmt.Errorf(
-			"binary write range index entries count: %w",
+			"write index header data to buffer: %w",
 			err,
 		)
 	}
@@ -106,34 +103,19 @@ func (i *Index[K]) UnmarshalBinary(
 	}
 
 	tmp := New(i.tree.compare)
-	elemsCount := binary.BigEndian.Uint64(
-		data[:indexbin.RecordsCountSize],
-	)
-	offset := indexbin.RecordsCountSize
-
-	if len(data) < offset+indexbin.EntriesCountSize {
+	var header indexbin.Header
+	if err := header.UnmarshalBinary(
+		data,
+	); err != nil {
 		return fmt.Errorf(
-			"entries count overflow data: %d and %d",
-			len(data),
-			offset+indexbin.EntriesCountSize,
-		)
-	}
-	entriesCount := binary.BigEndian.Uint32(
-		data[offset : offset+indexbin.EntriesCountSize],
-	)
-
-	offset += indexbin.EntriesCountSize
-	idx := offset
-
-	if uint64(entriesCount) >
-		uint64((len(data)-offset)/12) {
-		return fmt.Errorf(
-			"invalid entries count: %d",
-			entriesCount,
+			"unmarshal binary index header: %w",
+			err,
 		)
 	}
 
-	for range entriesCount {
+	idx := indexbin.HeaderSize
+
+	for range header.EntriesCount {
 		var entry indexbin.BinaryEntry
 
 		if err := entry.UnmarshalBinary(
@@ -174,28 +156,13 @@ func (i *Index[K]) UnmarshalBinary(
 			)
 		}
 
-		_, err = tmp.Exact(key)
-		switch {
-		case err == nil:
+		if err = tmp.tree.insertPosting(
+			key,
+			postings,
+		); err != nil {
 			return fmt.Errorf(
-				"duplicate index key: %v",
+				"insert posting with key='%v': %w",
 				key,
-			)
-
-		case errors.Is(err, common.ErrRecordNotFound):
-			if err = tmp.tree.insertPosting(
-				key,
-				postings,
-			); err != nil {
-				return fmt.Errorf(
-					"temporary tree add: %w",
-					err,
-				)
-			}
-
-		default:
-			return fmt.Errorf(
-				"check index key: %w",
 				err,
 			)
 		}
@@ -215,18 +182,18 @@ func (i *Index[K]) UnmarshalBinary(
 		)
 	}
 
-	if tmp.tree.elemsCount != elemsCount {
+	if tmp.tree.elemsCount != header.RecordsCount {
 		return fmt.Errorf(
 			"elements count mismatch: expected %d, got %d",
-			elemsCount,
+			header.RecordsCount,
 			tmp.tree.elemsCount,
 		)
 	}
 
-	if tmp.tree.nodesCount != entriesCount {
+	if tmp.tree.nodesCount != header.EntriesCount {
 		return fmt.Errorf(
 			"nodes count mismatch: expected %d, got %d",
-			entriesCount,
+			header.EntriesCount,
 			tmp.tree.nodesCount,
 		)
 	}

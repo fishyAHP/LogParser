@@ -2,7 +2,6 @@ package hash
 
 import (
 	"bytes"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"math"
@@ -17,24 +16,24 @@ func (i *Index[K]) MarshalBinary() ([]byte, error) {
 	}
 
 	var buf bytes.Buffer
+	header := indexbin.Header{
+		RecordsCount: i.count,
+		EntriesCount: uint32(len(i.idx)),
+	}
 
-	if err := binary.Write(
-		&buf,
-		binary.BigEndian,
-		i.count,
-	); err != nil {
+	headerData, err := header.MarshalBinary()
+	if err != nil {
 		return nil, fmt.Errorf(
-			"binary write index records count: %w",
+			"index header marshal binary: %w",
 			err,
 		)
 	}
-	if err := binary.Write(
-		&buf,
-		binary.BigEndian,
-		uint32(len(i.idx)),
+
+	if _, err = buf.Write(
+		headerData,
 	); err != nil {
 		return nil, fmt.Errorf(
-			"binary write index entries count: %w",
+			"write index header data to buffer: %w",
 			err,
 		)
 	}
@@ -90,34 +89,20 @@ func (i *Index[K]) UnmarshalBinary(
 	}
 
 	tmp := New[K]()
-	count := binary.BigEndian.Uint64(
-		data[:indexbin.RecordsCountSize],
-	)
-	offset := indexbin.RecordsCountSize
-
-	if len(data) < offset+indexbin.EntriesCountSize {
+	var header indexbin.Header
+	if err := header.UnmarshalBinary(
+		data,
+	); err != nil {
 		return fmt.Errorf(
-			"entries count overflow data: %d and %d",
-			len(data),
-			offset+indexbin.EntriesCountSize,
-		)
-	}
-	entriesCount := binary.BigEndian.Uint32(
-		data[offset : offset+indexbin.EntriesCountSize],
-	)
-
-	offset += indexbin.EntriesCountSize
-	idx := offset
-
-	if uint64(entriesCount) >
-		uint64((len(data)-offset)/12) {
-		return fmt.Errorf(
-			"invalid entries count: %d",
-			entriesCount,
+			"unmarshal binary index header: %w",
+			err,
 		)
 	}
 
-	for range entriesCount {
+	idx := indexbin.RecordsCountSize + indexbin.EntriesCountSize
+	var actualCount uint64
+
+	for range header.EntriesCount {
 		var entry indexbin.BinaryEntry
 
 		if err := entry.UnmarshalBinary(
@@ -164,6 +149,7 @@ func (i *Index[K]) UnmarshalBinary(
 			indexbin.RecordsCountSize +
 			len(entry.Records)
 
+		actualCount += entry.RecordsCount
 		idx += size
 	}
 
@@ -174,9 +160,17 @@ func (i *Index[K]) UnmarshalBinary(
 		)
 	}
 
+	if actualCount != header.RecordsCount {
+		return fmt.Errorf(
+			"records count mismatch: expected %d, got %d",
+			header.RecordsCount,
+			actualCount,
+		)
+	}
+
 	*i = Index[K]{
 		idx:   tmp.idx,
-		count: count,
+		count: header.RecordsCount,
 	}
 
 	return nil
