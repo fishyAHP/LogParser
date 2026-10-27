@@ -1,6 +1,7 @@
 package ranged
 
 import (
+	"fmt"
 	"iter"
 	"math"
 
@@ -19,8 +20,8 @@ type rbTree[K common.Key] struct {
 	// it needs to find place for insert in rb-tree
 	compare func(K, K) int
 
-	elemsCount int
-	nodesCount int
+	elemsCount uint64
+	nodesCount uint32
 }
 
 func newRBTree[K common.Key](comparator func(K, K) int) *rbTree[K] {
@@ -79,7 +80,7 @@ func (t *rbTree[K]) insert(
 			}
 		default:
 			if ok := current.add(value); !ok {
-				return common.ErrKeyExist
+				return common.ErrRecordExist
 			}
 			return
 		}
@@ -303,7 +304,7 @@ func (t *rbTree[K]) inBoundPeriod(n *node[K], left, right *localBound[K]) bool {
 }
 
 func (t *rbTree[K]) len() int {
-	return t.elemsCount
+	return int(t.elemsCount)
 }
 
 func (t *rbTree[K]) height() int {
@@ -423,6 +424,67 @@ func (t *rbTree[K]) forEach(
 			if !visit(n.key, matches) {
 				return
 			}
+		}
+	}
+}
+
+func (t *rbTree[K]) insertPosting(
+	key K,
+	posting *structs.PostingList,
+) error {
+	if posting == nil || posting.Len() == 0 {
+		return fmt.Errorf("empty posting list")
+	}
+
+	if t.root == nil {
+		t.root = newNodeWithPosting(key, posting)
+		t.root.color = Black
+
+		t.nodesCount = 1
+		t.elemsCount = uint64(posting.Len())
+		return nil
+	}
+
+	current := t.root
+
+	for {
+		cmp := t.compare(key, current.key)
+
+		switch cmp {
+		case -1:
+			if current.left != nil {
+				current = current.left
+				continue
+			}
+
+			nod := newNodeWithPosting(key, posting)
+			nod.parent = current
+			current.left = nod
+
+			t.nodesCount++
+			t.elemsCount += uint64(posting.Len())
+			t.fixInsert(nod)
+
+			return nil
+
+		case 1:
+			if current.right != nil {
+				current = current.right
+				continue
+			}
+
+			nod := newNodeWithPosting(key, posting)
+			nod.parent = current
+			current.right = nod
+
+			t.nodesCount++
+			t.elemsCount += uint64(posting.Len())
+			t.fixInsert(nod)
+
+			return nil
+
+		default:
+			return fmt.Errorf("duplicate key: %v", key)
 		}
 	}
 }
