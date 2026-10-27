@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
-	indexbin "fishyAHP/LogParser.git/internal/features/index/binary"
+	"fishyAHP/LogParser.git/internal/features/index/binary"
 	"fishyAHP/LogParser.git/internal/features/index/common"
 )
 
