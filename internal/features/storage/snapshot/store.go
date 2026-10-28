@@ -167,46 +167,5 @@ func (s *Store) nextGeneration() (manifest.Manifest, error) {
 
 }
 
-func writeSyncedFile(path string, data []byte) error {
-	file, err := os.OpenFile(
-		path,
-		os.O_WRONLY|os.O_CREATE|os.O_EXCL,
-		0o644,
-	)
-	if err != nil {
-		return fmt.Errorf(
-			"open file %q: %w",
-			path,
-			err,
-		)
-	}
-	defer func() {
-		_ = file.Close()
-	}()
 
-	if _, err = file.Write(data); err != nil {
-		return fmt.Errorf(
-			"file write data: %w",
-			err,
-		)
-	}
 
-	return file.Sync()
-}
-
-func syncDirectory(path string) (err error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return fmt.Errorf(
-			"open directory %q: %w",
-			path,
-			err,
-		)
-	}
-
-	defer func() {
-		err = errors.Join(err, file.Close())
-	}()
-
-	return file.Sync()
-}
