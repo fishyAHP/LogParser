@@ -10,6 +10,7 @@ import (
 	"slices"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
+	"fishyAHP/LogParser.git/internal/features/storage/segments"
 )
 
 type Iterator interface {
@@ -23,7 +24,6 @@ type Iterator interface {
 	Close() error
 }
 
-
 type storageIterator struct {
 	dir string
 
@@ -31,7 +31,7 @@ type storageIterator struct {
 	offset    uint64
 	file      *os.File
 
-	header  [RecordHeaderSize]byte
+	header  [segments.RecordHeaderSize]byte
 	data    []byte
 	id      domain.RecordID
 	pointer domain.RecordPointer
@@ -63,7 +63,7 @@ func (i *storageIterator) Next() bool {
 		}
 
 		i.file = file
-		curOffset = uint64(len(Magic))
+		curOffset = uint64(len(segments.Magic))
 	}
 
 	for {
@@ -87,7 +87,7 @@ func (i *storageIterator) Next() bool {
 					return false
 				}
 
-				curOffset = uint64(len(Magic))
+				curOffset = uint64(len(segments.Magic))
 				i.file = file
 				continue
 			}
@@ -98,7 +98,7 @@ func (i *storageIterator) Next() bool {
 	}
 
 	length := binary.BigEndian.Uint32(i.header[0:4])
-	if FileSize(length)+RecordHeaderSize >= MaxSegmentSize {
+	if segments.FileSize(length)+segments.RecordHeaderSize >= segments.MaxSegmentSize {
 		i.err = ErrRecordTooLarge
 		return false
 	}
@@ -110,7 +110,7 @@ func (i *storageIterator) Next() bool {
 	}
 	i.data = i.data[:int(length)]
 
-	curOffset += uint64(RecordHeaderSize)
+	curOffset += uint64(segments.RecordHeaderSize)
 	if _, err = i.file.ReadAt(
 		i.data,
 		int64(curOffset),
@@ -148,7 +148,7 @@ func openFile(dir string, curID uint64) (*os.File, error) {
 		)
 	}
 
-	err = validateFileHeader(file)
+	err = segments.validateFileHeader(file)
 	if err != nil {
 		_ = file.Close()
 		return nil, fmt.Errorf(

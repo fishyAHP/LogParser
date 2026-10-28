@@ -13,6 +13,7 @@ import (
 	"fishyAHP/LogParser.git/internal/features/query"
 	"fishyAHP/LogParser.git/internal/features/query/iterators"
 	"fishyAHP/LogParser.git/internal/features/storage"
+	"fishyAHP/LogParser.git/internal/features/storage/segments"
 )
 
 type Service struct {
@@ -190,8 +191,8 @@ func (s *Service) Ingest(raw []byte) error {
 func (s *Service) IngestReader(reader io.Reader) error {
 	scanner := bufio.NewScanner(reader)
 	scanner.Buffer(
-		make([]byte, 4*storage.KByte),
-		int(storage.MByte),
+		make([]byte, 4*segments.KByte),
+		int(segments.MByte),
 	)
 
 	for scanner.Scan() {

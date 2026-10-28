@@ -18,6 +18,7 @@ import (
 
 	"fishyAHP/LogParser.git/internal/core/domain"
 	"fishyAHP/LogParser.git/internal/features/index"
+	"fishyAHP/LogParser.git/internal/features/storage/snapshot/manifest"
 )
 
 var ErrNoSnapshots = errors.New("no snapshot generations")
@@ -59,17 +60,17 @@ func (s *Store) readLatest(
 	consume func(
 		iter.Seq2[index.Snapshot, error],
 	) error,
-) (manifest, error) {
+) (manifest.Manifest, error) {
 	last, err := findLastSnapshot(s.path)
 	if err != nil {
-		return manifest{}, fmt.Errorf(
+		return manifest.Manifest{}, fmt.Errorf(
 			"find last snapshot: %w",
 			err,
 		)
 	}
 
 	if last == 0 {
-		return manifest{}, ErrNoSnapshots
+		return manifest.Manifest{}, ErrNoSnapshots
 	}
 
 	dir := filepath.Join(
@@ -79,7 +80,7 @@ func (s *Store) readLatest(
 
 	root, err := os.OpenRoot(dir)
 	if err != nil {
-		return manifest{}, fmt.Errorf(
+		return manifest.Manifest{}, fmt.Errorf(
 			"open snapshot generation %d: %w",
 			last,
 			err,
@@ -95,7 +96,7 @@ func (s *Store) readLatest(
 		-1,
 	)
 	if err != nil {
-		return manifest{}, fmt.Errorf(
+		return manifest.Manifest{}, fmt.Errorf(
 			"read snapshot manifest: %w",
 			err,
 		)
@@ -103,7 +104,7 @@ func (s *Store) readLatest(
 
 	m, err := decodeManifest(data, last)
 	if err != nil {
-		return manifest{}, fmt.Errorf(
+		return manifest.Manifest{}, fmt.Errorf(
 			"decode snapshot manifest: %w",
 			err,
 		)
@@ -113,28 +114,28 @@ func (s *Store) readLatest(
 		for _, entry := range m.Indexes {
 			data, err = readRegularFile(
 				root,
-				entry.Filename,
-				int64(entry.Size),
+				entry.filename,
+				int64(entry.size),
 			)
 
 			if err != nil {
 				yield(index.Snapshot{}, fmt.Errorf(
 					"read index %q: %w",
-					entry.Name,
+					entry.name,
 					err,
 				))
 				return
 			}
 
 			digest := sha256.Sum256(data)
-			if hex.EncodeToString(digest[:]) != entry.SHA256 {
+			if hex.EncodeToString(digest[:]) != entry.sha256 {
 				err = errors.New(
 					"snapshot checksum mismatch",
 				)
 			}
 
 			if !yield(index.Snapshot{
-				Name: entry.Name,
+				Name: entry.name,
 				Data: data,
 			}, nil) {
 				return
@@ -142,7 +143,7 @@ func (s *Store) readLatest(
 		}
 	}
 	if err = consume(seq); err != nil {
-		return manifest{}, err
+		return manifest.Manifest{}, err
 	}
 	return m, nil
 }
@@ -150,8 +151,8 @@ func (s *Store) readLatest(
 func decodeManifest(
 	data []byte,
 	generation uint32,
-) (manifest, error) {
-	var m manifest
+) (manifest.Manifest, error) {
+	var m manifest.Manifest
 
 	if !utf8.Valid(data) {
 		return m, errors.New(
@@ -239,25 +240,25 @@ func decodeManifest(
 			return m, err
 		}
 
-		if entry.Name == "" ||
-			!utf8.ValidString(entry.Name) {
+		if entry.name == "" ||
+			!utf8.ValidString(entry.name) {
 			return m, errors.New(
 				"invalid snapshot index name",
 			)
 		}
 
-		if _, ok := names[entry.Name]; ok {
+		if _, ok := names[entry.name]; ok {
 			return m, fmt.Errorf(
 				"duplicate snapshot index %q",
-				entry.Name,
+				entry.name,
 			)
 		}
-		names[entry.Name] = struct{}{}
+		names[entry.name] = struct{}{}
 
 		ordinal, err := strconv.Atoi(
 			strings.TrimSuffix(
 				strings.TrimPrefix(
-					entry.Filename,
+					entry.filename,
 					"index-",
 				),
 				".bin"),
@@ -266,38 +267,38 @@ func decodeManifest(
 		if err != nil ||
 			ordinal < 1 ||
 			ordinal > len(m.Indexes) ||
-			entry.Filename != fmt.Sprintf(
+			entry.filename != fmt.Sprintf(
 				"index-%04d.bin",
 				ordinal,
 			) {
 			return m, fmt.Errorf(
 				"invalid index filename %q",
-				entry.Filename,
+				entry.filename,
 			)
 		}
 
-		if _, ok := files[entry.Filename]; ok {
+		if _, ok := files[entry.filename]; ok {
 			return m, fmt.Errorf(
 				"duplicate snapshot filename %q",
-				entry.Filename,
+				entry.filename,
 			)
 		}
-		files[entry.Filename] = struct{}{}
+		files[entry.filename] = struct{}{}
 
-		if entry.Size < 0 {
+		if entry.size < 0 {
 			return m, fmt.Errorf(
 				"negative index size for %q",
-				entry.Name,
+				entry.name,
 			)
 		}
 
-		digest, err := hex.DecodeString(entry.SHA256)
+		digest, err := hex.DecodeString(entry.sha256)
 		if err != nil ||
 			len(digest) != sha256.Size ||
-			entry.SHA256 != strings.ToLower(entry.SHA256) {
+			entry.sha256 != strings.ToLower(entry.sha256) {
 			return m, fmt.Errorf(
 				"invalid checksum for %q",
-				entry.Name,
+				entry.name,
 			)
 		}
 	}

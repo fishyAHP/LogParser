@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
+	"fishyAHP/LogParser.git/internal/features/storage/segments"
 )
 
 func testStorageDir(t *testing.T) string {
@@ -287,7 +288,7 @@ func TestStorageCorruptedRecordID(t *testing.T) {
 	var buf [8]byte
 	binary.BigEndian.PutUint64(buf[:], 100)
 
-	offset := int64(len(Magic) + 4)
+	offset := int64(len(segments.Magic) + 4)
 
 	if _, err := file.WriteAt(buf[:], offset); err != nil {
 		file.Close()
@@ -343,7 +344,7 @@ func TestStorageMissingSegment(t *testing.T) {
 	dir := t.TempDir()
 
 	for _, id := range []uint64{1, 3} {
-		seg, err := newSegment(dir, id, writeFlag)
+		seg, err := segments.newSegment(dir, id, writeFlag)
 		if err != nil {
 			t.Fatal(err)
 		}

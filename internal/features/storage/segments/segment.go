@@ -1,4 +1,4 @@
-package storage
+package segments
 
 import (
 	"bytes"
@@ -12,36 +12,14 @@ import (
 	"fishyAHP/LogParser.git/internal/core/domain"
 )
 
-type FileSize uint64
-
-const (
-	Byte           FileSize = 1
-	KByte                   = 1024 * Byte
-	MByte                   = 1024 * KByte
-	MaxSegmentSize          = 100 * MByte
-
-	loadFactor = 87.5 / 100
-)
-
 const (
 	RecordLengthSize = 4 * Byte
 	RecordIdSize     = 8 * Byte
 	RecordHeaderSize = RecordLengthSize + RecordIdSize
 )
 
-func (f FileSize) String() string {
-	switch {
-	case f >= MByte:
-		return fmt.Sprintf("%.2fmb", float64(f)/float64(MByte))
-	case f >= KByte:
-		return fmt.Sprintf("%.2fkb", float64(f)/float64(KByte))
-	default:
-		return fmt.Sprintf("%db", f)
-	}
-}
-
-// Структура segment представляет собой файл, в котором сейчас происходит запись или чтение
-type segment struct {
+// Segment представляет собой файл, в котором сейчас происходит запись или чтение
+type Segment struct {
 	ID   uint64
 	size FileSize
 	file *os.File
@@ -49,24 +27,19 @@ type segment struct {
 
 var Magic = []byte{'L', 'G', 'P', 'R', 'S', 'R'}
 
-// newSegment создает/открывает файл, дает ему номер/название,
+// NewSegment создает/открывает файл, дает ему номер/название,
 // если его не было.
 // Также определяет его текущий размер.
-func newSegment(
+func NewSegment(
 	dir string,
 	id uint64,
 	flag int,
-) (*segment, error) {
-	// filepath.Join конкатенирует несколько строк в файловый путь.
-	// После того как сделаем интеграцию парсера и хранилища уберем эту обработку туда
+) (*Segment, error) {
 	path := filepath.Join(
 		dir,
 		fmt.Sprintf("segment-%04d", id),
 	)
 
-	// os.OpenFile открывает нужный файл или создает если его не было,
-	// файл открывается для чтения и записи, в конце битовой маски флаг,
-	// что указатель записи в файл ставить в его конец.
 	file, err := os.OpenFile(
 		path,
 		flag,
@@ -101,7 +74,9 @@ func newSegment(
 			)
 		}
 	} else {
-		if err = validateFileHeader(file); err != nil {
+		if err = validateFileHeader(
+			file,
+		); err != nil {
 			return nil, fmt.Errorf(
 				"validate header: %w",
 				err,
@@ -117,7 +92,7 @@ func newSegment(
 		)
 	}
 
-	return &segment{
+	return &Segment{
 		ID:   id,
 		size: FileSize(stat.Size()),
 		file: file,
@@ -164,7 +139,7 @@ func validateFileHeader(file *os.File) error {
 	return nil
 }
 
-func (s *segment) isOverloaded(
+func (s *Segment) IsOverloaded(
 	size FileSize,
 ) bool {
 	return float64(s.size+size+RecordHeaderSize)/
@@ -172,7 +147,7 @@ func (s *segment) isOverloaded(
 		loadFactor
 }
 
-func (s *segment) write(
+func (s *Segment) Write(
 	data []byte,
 	recordID uint64,
 ) (domain.RecordPointer, error) {
@@ -194,8 +169,12 @@ func (s *segment) write(
 	n, err := s.file.Write(buf)
 	if err != nil {
 		return domain.RecordPointer{},
-			fmt.Errorf("write segment file: %w", err)
+			fmt.Errorf(
+				"write segment file: %w",
+				err,
+			)
 	}
+
 	if n != len(buf) {
 		return domain.RecordPointer{}, io.ErrShortWrite
 	}
@@ -210,7 +189,7 @@ func (s *segment) write(
 	return pointer, nil
 }
 
-func (s *segment) read(
+func (s *Segment) Read(
 	pointer domain.RecordPointer,
 ) ([]byte, error) {
 	if s.ID != pointer.SegmentID {
@@ -233,7 +212,7 @@ func (s *segment) read(
 	return data, nil
 }
 
-func (s *segment) close() error {
+func (s *Segment) Close() error {
 	if err := s.file.Close(); err != nil {
 		return fmt.Errorf(
 			"close segment file: %w",
@@ -245,6 +224,6 @@ func (s *segment) close() error {
 	return nil
 }
 
-func (s *segment) isOpen() bool {
+func (s *Segment) IsOpen() bool {
 	return s.ID != 0
 }

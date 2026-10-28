@@ -18,6 +18,7 @@ import (
 
 	"fishyAHP/LogParser.git/internal/core/domain"
 	"fishyAHP/LogParser.git/internal/features/index"
+	"fishyAHP/LogParser.git/internal/features/storage/snapshot/manifest"
 )
 
 func newTestStore(t *testing.T) *Store {
@@ -39,14 +40,14 @@ func sequence(items ...index.Snapshot) iter.Seq2[index.Snapshot, error] {
 	}
 }
 
-func readGeneration(t *testing.T, s *Store, generation uint32) (manifest, []index.Snapshot) {
+func readGeneration(t *testing.T, s *Store, generation uint32) (manifest.Manifest, []index.Snapshot) {
 	t.Helper()
 	dir := filepath.Join(s.path, fmt.Sprintf("snapshot-%04d", generation))
 	data, err := os.ReadFile(filepath.Join(dir, "manifest.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	var m manifest
+	var m manifest.Manifest
 	if err := json.Unmarshal(data, &m); err != nil {
 		t.Fatal(err)
 	}
@@ -55,18 +56,18 @@ func readGeneration(t *testing.T, s *Store, generation uint32) (manifest, []inde
 	}
 	result := make([]index.Snapshot, 0, len(m.Indexes))
 	for _, entry := range m.Indexes {
-		if filepath.Base(entry.Filename) != entry.Filename || !strings.HasPrefix(entry.Filename, "index-") {
-			t.Fatalf("unsafe filename %q", entry.Filename)
+		if filepath.Base(entry.filename) != entry.filename || !strings.HasPrefix(entry.filename, "index-") {
+			t.Fatalf("unsafe filename %q", entry.filename)
 		}
-		data, err := os.ReadFile(filepath.Join(dir, entry.Filename))
+		data, err := os.ReadFile(filepath.Join(dir, entry.filename))
 		if err != nil {
 			t.Fatal(err)
 		}
 		digest := sha256.Sum256(data)
-		if len(data) != entry.Size || hex.EncodeToString(digest[:]) != entry.SHA256 {
-			t.Fatalf("invalid size or digest for %q", entry.Name)
+		if len(data) != entry.size || hex.EncodeToString(digest[:]) != entry.sha256 {
+			t.Fatalf("invalid size or digest for %q", entry.name)
 		}
-		result = append(result, index.Snapshot{Name: entry.Name, Data: data})
+		result = append(result, index.Snapshot{Name: entry.name, Data: data})
 	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -408,7 +409,7 @@ func TestSavePublishesOnlyAfterCompleteIteration(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			var m manifest
+			var m manifest.Manifest
 			if err := json.Unmarshal(data, &m); err != nil {
 				t.Fatal(err)
 			}
