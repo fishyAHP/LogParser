@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
@@ -38,9 +39,9 @@ type indexManifest struct {
 	sha256   string
 }
 
-func (i *indexManifest) MarshalBinary() ([]byte, error) {
-	if i == nil {
-		return nil, errors.New("nil index manifest")
+func (i indexManifest) MarshalBinary() ([]byte, error) {
+	if err := i.validate(); err != nil {
+		return nil, err
 	}
 
 	var buf bytes.Buffer
@@ -114,7 +115,91 @@ func (i *indexManifest) MarshalBinary() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+func (i *indexManifest) UnmarshalBinary(
+	data []byte,
+) error {
+	if len(data) < 2 {
+		return errors.New("data too short for name length")
+	}
 
+	lenName := binary.BigEndian.Uint16(
+		data[:2],
+	)
+	offset := 2
+
+	end := offset + int(lenName)
+	if len(data) < end {
+		return errors.New("data len too short for name")
+	}
+
+	name := string(data[offset:end])
+
+	offset = end
+
+	if len(data)-offset < 2 {
+		return errors.New("data too short for filename length")
+	}
+
+	lenFilename := binary.BigEndian.Uint16(data[offset:])
+	offset += 2
+
+	end = offset + int(lenFilename)
+	if len(data) < end {
+		return errors.New("data len too short for filename")
+	}
+
+	filename := string(data[offset:end])
+
+	offset = end
+
+	end = offset + 8
+	if len(data) < end {
+		return fmt.Errorf("data len too short for index snapshot size")
+	}
+	size := binary.BigEndian.Uint64(
+		data[offset:end],
+	)
+
+	offset = end
+	end = offset + 32
+	if len(data) < end {
+		return errors.New("data len too short for SHA256")
+	}
+
+	digest := data[offset:end]
+	sha := hex.EncodeToString(digest)
+
+	tmp := indexManifest{
+		name:     name,
+		filename: filename,
+		size:     segments.FileSize(size),
+		sha256:   sha,
+	}
+
+	if err := tmp.validate(); err != nil {
+		return err
+	}
+
+	*i = tmp
+	return nil
+}
+
+func (i *indexManifest) validate() error {
+	if strings.TrimSpace(i.name) == "" {
+		return errors.New(
+			"empty index name",
+		)
+	}
+
+	if strings.TrimSpace(i.filename) == "" {
+		return fmt.Errorf(
+			"index %q has empty name",
+			i.name,
+		)
+	}
+
+	return nil
+}
 
 func (m *Manifest) MarshalBinary() ([]byte, error) {
 	h, err := m.header()
@@ -152,5 +237,62 @@ func (m *Manifest) MarshalBinary() ([]byte, error) {
 func (m *Manifest) UnmarshalBinary(
 	data []byte,
 ) error {
+	var h header
+	if err := h.UnmarshalBinary(
+		data,
+	); err != nil {
+		return fmt.Errorf(
+			"manifest header binary unmarshal: %w",
+			err,
+		)
+	}
 
+	remaining := len(data) - headerSize
+	if uint64(h.indexCount) > uint64(remaining/44) {
+		return fmt.Errorf(
+			"index count %d exceeds available data",
+			h.indexCount,
+		)
+	}
+
+	indexes := make([]indexManifest, 0, h.indexCount)
+	offset := headerSize
+
+	for range int(h.indexCount) {
+		var idx indexManifest
+
+		if err := idx.UnmarshalBinary(
+			data[offset:],
+		); err != nil {
+			return fmt.Errorf(
+				"index manifest binary unmarshaling: %w",
+				err,
+			)
+		}
+
+		consumed := 2 + len(idx.name) +
+			2 + len(idx.filename) +
+			8 + 32
+
+		offset += consumed
+
+		indexes = append(indexes, idx)
+	}
+
+	if offset != len(data) {
+		return fmt.Errorf(
+			"trailing data in manifest: %d bytes",
+			len(data)-offset,
+		)
+	}
+
+	*m = Manifest{
+		Version:             h.version,
+		Generation:          h.generation,
+		LastIndexedRecordID: domain.RecordID(h.lastID),
+		CreatedAt:           time.Unix(0, h.createdAt),
+		Indexes:             indexes,
+	}
+
+	return nil
 }
