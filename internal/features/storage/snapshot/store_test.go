@@ -281,3 +281,160 @@ func TestStoreLoadCorruptedIndex(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
+
+func TestStoreLoadLatestGeneration(t *testing.T) {
+	dir := t.TempDir()
+	store := &Store{path: dir}
+
+	makeSnapshots := func(data string) iter.Seq2[index.Snapshot, error] {
+		return func(yield func(index.Snapshot, error) bool) {
+			yield(index.Snapshot{
+				Name: "hash",
+				Data: []byte(data),
+			}, nil)
+		}
+	}
+
+	if err := store.Save(makeSnapshots("generation 1"), 10); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := store.Save(makeSnapshots("generation 2"), 20); err != nil {
+		t.Fatal(err)
+	}
+
+	restored := &Store{path: dir}
+	rebuilder := &testRebuilder{}
+
+	if err := restored.Load(rebuilder); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(rebuilder.snapshots) != 1 {
+		t.Fatalf(
+			"expected 1 snapshot, got %d",
+			len(rebuilder.snapshots),
+		)
+	}
+
+	if got := string(rebuilder.snapshots[0].Data); got != "generation 2" {
+		t.Errorf("got %q, want %q", got, "generation 2")
+	}
+
+	if restored.lastIndexedRecordID != 20 {
+		t.Errorf(
+			"last record ID: got %d, want 20",
+			restored.lastIndexedRecordID,
+		)
+	}
+}
+
+func TestStoreLoadMissingIndex(t *testing.T) {
+	dir := t.TempDir()
+	store := &Store{path: dir}
+
+	snapshots := func(yield func(index.Snapshot, error) bool) {
+		yield(index.Snapshot{
+			Name: "hash",
+			Data: []byte("index data"),
+		}, nil)
+	}
+
+	if err := store.Save(snapshots, 10); err != nil {
+		t.Fatal(err)
+	}
+
+	snapshotDir := filepath.Join(dir, "snapshot-0001")
+
+	r := &reader{dir: snapshotDir}
+	if err := r.readManifest(); err != nil {
+		t.Fatal(err)
+	}
+
+	removed := false
+
+	for info := range r.m.Indexes() {
+		path := filepath.Join(snapshotDir, info.Filename)
+
+		if err := os.Remove(path); err != nil {
+			t.Fatal(err)
+		}
+
+		removed = true
+		break
+	}
+
+	if !removed {
+		t.Fatal("manifest contains no indexes")
+	}
+
+	rebuilder := &testRebuilder{}
+
+	if err := store.Load(rebuilder); err == nil {
+		t.Fatal("expected load error for missing index")
+	}
+}
+
+func TestStoreLoadDoesNotUpdateCheckpointOnError(t *testing.T) {
+	dir := t.TempDir()
+	store := &Store{path: dir}
+
+	snapshots := func(yield func(index.Snapshot, error) bool) {
+		if !yield(index.Snapshot{
+			Name: "hash",
+			Data: []byte("hash data"),
+		}, nil) {
+			return
+		}
+
+		yield(index.Snapshot{
+			Name: "range",
+			Data: []byte("range data"),
+		}, nil)
+	}
+
+	if err := store.Save(snapshots, 100); err != nil {
+		t.Fatal(err)
+	}
+
+	snapshotDir := filepath.Join(dir, "snapshot-0001")
+	r := &reader{dir: snapshotDir}
+
+	if err := r.readManifest(); err != nil {
+		t.Fatal(err)
+	}
+
+	i := 0
+	for info := range r.m.Indexes() {
+		i++
+		if i != 2 {
+			continue
+		}
+
+		path := filepath.Join(snapshotDir, info.Filename)
+
+		if err := os.WriteFile(path, []byte("broken"), 0600); err != nil {
+			t.Fatal(err)
+		}
+
+		break
+	}
+
+	if i < 2 {
+		t.Fatal("expected at least two indexes")
+	}
+
+	restored := &Store{path: dir}
+	rebuilder := &testRebuilder{}
+
+	if err := restored.Load(rebuilder); err == nil {
+		t.Fatal("expected load error")
+	}
+
+	if restored.lastIndexedRecordID != 0 {
+		t.Errorf(
+			"checkpoint changed after failed load: %d",
+			restored.lastIndexedRecordID,
+		)
+	}
+}
