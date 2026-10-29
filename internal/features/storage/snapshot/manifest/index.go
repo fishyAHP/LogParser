@@ -153,7 +153,7 @@ func (i *indexManifest) UnmarshalBinary(
 
 	end = offset + 8
 	if len(data) < end {
-		return fmt.Errorf("data len too short for index snapshot size")
+		return errors.New("data len too short for index snapshot size")
 	}
 	size := binary.BigEndian.Uint64(
 		data[offset:end],

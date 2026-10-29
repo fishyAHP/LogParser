@@ -24,7 +24,7 @@ func (w *writer) writeIndex(
 ) error {
 	filename := fmt.Sprintf(
 		"%d.bin",
-		len(w.m.Indexes)+1,
+		len(w.m.indexes)+1,
 	)
 	path := filepath.Join(
 		w.tmpDir,

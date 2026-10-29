@@ -208,7 +208,6 @@ func (s *Store) writer(
 		Generation:          generation,
 		LastIndexedRecordID: lastRecordID,
 		CreatedAt:           time.Now().UTC(),
-		Indexes:             nil,
 	}
 
 	return &writer{

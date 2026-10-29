@@ -38,10 +38,10 @@ func (m *Manifest) header() (header, error) {
 		)
 	}
 
-	if len(m.Indexes) > math.MaxUint32 {
+	if len(m.indexes) > math.MaxUint32 {
 		return header{}, fmt.Errorf(
 			"too many indexes in manifest: %d",
-			len(m.Indexes),
+			len(m.indexes),
 		)
 	}
 
@@ -51,7 +51,7 @@ func (m *Manifest) header() (header, error) {
 		generation: m.Generation,
 		lastID:     uint64(m.LastIndexedRecordID),
 		createdAt:  m.CreatedAt.UnixNano(),
-		indexCount: uint32(len(m.Indexes)),
+		indexCount: uint32(len(m.indexes)),
 	}, nil
 }
 

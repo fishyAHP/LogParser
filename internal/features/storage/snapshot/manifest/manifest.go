@@ -22,7 +22,7 @@ type Manifest struct {
 	Generation          uint32
 	LastIndexedRecordID domain.RecordID
 	CreatedAt           time.Time
-	Indexes             []indexManifest
+	indexes             []indexManifest
 }
 
 func (m *Manifest) AddIndex(
@@ -38,7 +38,7 @@ func (m *Manifest) AddIndex(
 		)
 	}
 
-	m.Indexes = append(m.Indexes, idx)
+	m.indexes = append(m.indexes, idx)
 	return nil
 }
 
@@ -59,7 +59,7 @@ func (m *Manifest) MarshalBinary() ([]byte, error) {
 		)
 	}
 
-	for _, idx := range m.Indexes {
+	for _, idx := range m.indexes {
 		indexData, err := idx.MarshalBinary()
 		if err != nil {
 			return nil, fmt.Errorf(
@@ -132,7 +132,7 @@ func (m *Manifest) UnmarshalBinary(
 		Generation:          h.generation,
 		LastIndexedRecordID: domain.RecordID(h.lastID),
 		CreatedAt:           time.Unix(0, h.createdAt).UTC(),
-		Indexes:             indexes,
+		indexes:             indexes,
 	}
 
 	return nil

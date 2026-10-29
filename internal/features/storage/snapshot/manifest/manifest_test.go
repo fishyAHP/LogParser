@@ -20,7 +20,7 @@ func testManifest() Manifest {
 		Generation:          3,
 		LastIndexedRecordID: domain.RecordID(1000),
 		CreatedAt:           time.Unix(1700000000, 123456789).UTC(),
-		Indexes: []indexManifest{
+		indexes: []indexManifest{
 			{
 				name:     "level",
 				filename: "index-0001.bin",
@@ -117,7 +117,7 @@ func TestManifestPreserveOnError(t *testing.T) {
 
 	before := original
 
-	before.Indexes = append([]indexManifest(nil), original.Indexes...)
+	before.indexes = append([]indexManifest(nil), original.indexes...)
 
 	data := []byte{0x01, 0x02, 0x03}
 

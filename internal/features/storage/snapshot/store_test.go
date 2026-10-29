@@ -70,7 +70,7 @@ func TestStoreSave(t *testing.T) {
 
 	if m.Generation != 1 ||
 		m.LastIndexedRecordID != domain.RecordID(100) ||
-		len(m.Indexes) != 2 {
+		len(m.indexes) != 2 {
 		t.Fatalf("unexpected manifest: %+v", m)
 	}
 
