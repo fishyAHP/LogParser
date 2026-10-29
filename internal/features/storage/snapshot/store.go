@@ -289,3 +289,7 @@ func (s *Store) Load(
 
 	return nil
 }
+
+func (s *Store) Checkpoint() (domain.RecordID, time.Time) {
+	return s.lastIndexedRecordID, s.lastUpdate
+}

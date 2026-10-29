@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
+	"time"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
 	"fishyAHP/LogParser.git/internal/features/index"
@@ -14,33 +16,29 @@ import (
 	"fishyAHP/LogParser.git/internal/features/query/iterators"
 	"fishyAHP/LogParser.git/internal/features/storage"
 	"fishyAHP/LogParser.git/internal/features/storage/segments"
+	"fishyAHP/LogParser.git/internal/features/storage/snapshot"
 )
 
 type Service struct {
-	index  *index.Manager
-	engine *query.Engine
-	parser *parse.LogParser
-	store  *storage.Storage
+	index         *index.Manager
+	engine        *query.Engine
+	parser        *parse.LogParser
+	storage       *storage.Storage
+	catalog       *domain.FieldsCatalog
+	snapshotStore *snapshot.Store
 
-	catalog *domain.FieldsCatalog
-}
-
-type IndexManager interface {
-	Index(
-		record domain.RecordID,
-		entry domain.LogEntry,
-	) error
+	lastIndexedID domain.RecordID
 }
 
 func NewService(
 	scheme *domain.Scheme,
 	format domain.Format,
-	storagePath string,
+	path string,
 ) (*Service, error) {
 	service, err := newService(
 		scheme,
 		format,
-		storagePath,
+		path,
 	)
 	if err != nil {
 		return nil, err
@@ -54,14 +52,39 @@ var ErrIndexRebuild = errors.New("rebuild indexes")
 func newService(
 	scheme *domain.Scheme,
 	format domain.Format,
-	storagePath string,
+	path string,
 ) (*Service, error) {
+	if err := scheme.Validate(); err != nil {
+		return nil, fmt.Errorf(
+			"invalid scheme: %w",
+			err,
+		)
+	}
+
 	catalog := domain.NewCatalog()
 
-	store, err := storage.New(storagePath)
+	start := time.Now()
+	store, err := storage.New(
+		filepath.Join(
+			path,
+			"logs",
+		))
+	fmt.Println("Storage recovery:", time.Since(start))
 	if err != nil {
 		return nil, fmt.Errorf(
 			"new storage: %w",
+			err,
+		)
+	}
+
+	snapshotStore, err := snapshot.NewStore(
+		filepath.Join(
+			path,
+			"snapshots",
+		))
+	if err != nil {
+		return nil, fmt.Errorf(
+			"new snapshot store: %w",
 			err,
 		)
 	}
@@ -92,11 +115,12 @@ func newService(
 	}
 
 	service := &Service{
-		parser:  parser,
-		store:   store,
-		index:   idx,
-		engine:  engine,
-		catalog: catalog,
+		parser:        parser,
+		storage:       store,
+		index:         idx,
+		engine:        engine,
+		catalog:       catalog,
+		snapshotStore: snapshotStore,
 	}
 
 	if err = service.rebuildMetadata(); err != nil {
@@ -126,7 +150,27 @@ func (s *Service) RebuildIndexes() error {
 }
 
 func (s *Service) rebuildMetadata() error {
-	iter := s.store.Iterator()
+	start := time.Now()
+
+	if err := s.snapshotStore.Load(s.index); err != nil {
+		if !errors.Is(err, snapshot.ErrNoSnapshots) {
+			return fmt.Errorf(
+				"load indexes: %w",
+				err,
+			)
+		}
+	}
+
+	fmt.Println("Snapshot load:", time.Since(start))
+	start = time.Now()
+
+	lastIndexedID, _ := s.snapshotStore.Checkpoint()
+	s.lastIndexedID = lastIndexedID
+
+	var reindexed int
+	fmt.Printf("Loaded checkpoint: %d\n", lastIndexedID)
+
+	iter := s.storage.Iterator()
 	for iter.Next() {
 		data := iter.Data()
 
@@ -138,6 +182,13 @@ func (s *Service) rebuildMetadata() error {
 			)
 		}
 
+		s.catalog.Add(parsed.Fields...)
+
+		if iter.RecordID() <= lastIndexedID {
+			continue
+		}
+
+		reindexed++
 		if err := s.index.Index(
 			iter.RecordID(),
 			parsed.Entry,
@@ -148,11 +199,17 @@ func (s *Service) rebuildMetadata() error {
 			)
 		}
 
-		s.catalog.Add(parsed.Fields...)
+		s.lastIndexedID = iter.RecordID()
 	}
 
+	fmt.Printf("indexed after snapshot: %d\n", reindexed)
+	fmt.Println("Metadata recovery:", time.Since(start))
+
 	if err := iter.Err(); err != nil {
-		return fmt.Errorf("iterator err: %w", err)
+		return fmt.Errorf(
+			"iterator err: %w",
+			err,
+		)
 	}
 
 	return nil
@@ -168,7 +225,7 @@ func (s *Service) Ingest(raw []byte) error {
 	}
 
 	// TODO: storage write may succeed, but index failed, need rollback/WAL
-	record, err := s.store.Write(raw)
+	record, err := s.storage.Write(raw)
 	if err != nil {
 		return fmt.Errorf(
 			"storage write: %w",
@@ -185,6 +242,7 @@ func (s *Service) Ingest(raw []byte) error {
 
 	s.catalog.Add(parsed.Fields...)
 
+	s.lastIndexedID = record
 	return nil
 }
 
@@ -232,10 +290,30 @@ func (s *Service) Query(q string) (iterators.Rows, error) {
 }
 
 func (s *Service) Close() error {
-	err := s.store.Close()
-	if err != nil {
+	if err := s.Save(); err != nil {
+		return fmt.Errorf(
+			"service save: %w",
+			err,
+		)
+	}
+
+	if err := s.storage.Close(); err != nil {
 		return fmt.Errorf(
 			"storage close: %w",
+			err,
+		)
+	}
+
+	return nil
+}
+
+func (s *Service) Save() error {
+	if err := s.snapshotStore.Save(
+		s.index.MakeSnapshots(),
+		s.lastIndexedID,
+	); err != nil {
+		return fmt.Errorf(
+			"saving snapshot: %w",
 			err,
 		)
 	}
