@@ -2,6 +2,7 @@ package manifest
 
 import (
 	"fmt"
+	"iter"
 	"time"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
@@ -140,4 +141,28 @@ func (m *Manifest) UnmarshalBinary(
 	}
 
 	return nil
+}
+
+type IndexInfo struct {
+	Name     string
+	Filename string
+	SHA256   string
+	Size     segments.FileSize
+}
+
+func (m *Manifest) Indexes() iter.Seq[IndexInfo] {
+	return func(yield func(IndexInfo) bool) {
+		for _, index := range m.indexes {
+			info := IndexInfo{
+				Name:     index.name,
+				Filename: index.filename,
+				SHA256:   index.sha256,
+				Size:     index.size,
+			}
+
+			if !yield(info) {
+				return
+			}
+		}
+	}
 }

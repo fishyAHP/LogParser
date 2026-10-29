@@ -17,6 +17,8 @@ import (
 	"fishyAHP/LogParser.git/internal/features/storage/snapshot/manifest"
 )
 
+var ErrNoSnapshots = errors.New("no snapshots in directory")
+
 type Store struct {
 	mtx                 sync.Mutex
 	path                string
@@ -215,4 +217,75 @@ func (s *Store) writer(
 		finalDir: finalDir,
 		m:        m,
 	}, nil
+}
+
+func (s *Store) reader(
+	dir string,
+) *reader {
+	return &reader{
+		dir: dir,
+	}
+}
+
+type Rebuilder interface {
+	FromSnapshots(
+		snapshots iter.Seq2[index.Snapshot, error],
+	) error
+}
+
+func (s *Store) Load(
+	rebuilder Rebuilder,
+) error {
+	generation, err := findLastSnapshot(
+		s.path,
+	)
+	if err != nil {
+		return fmt.Errorf(
+			"find last snapshot: %w",
+			err,
+		)
+	}
+
+	if generation == 0 {
+		return ErrNoSnapshots
+	}
+
+	dir := filepath.Join(
+		s.path,
+		fmt.Sprintf(
+			"snapshot-%04d",
+			generation,
+		),
+	)
+
+	r := s.reader(dir)
+
+	if err = r.readManifest(); err != nil {
+		return fmt.Errorf(
+			"read manifest: %w",
+			err,
+		)
+	}
+
+	if r.m.Generation != generation {
+		return fmt.Errorf(
+			"snapshot generation mismatch: dir %d, manifest %d",
+			generation,
+			r.m.Generation,
+		)
+	}
+
+	if err = rebuilder.FromSnapshots(
+		r.snapshots(),
+	); err != nil {
+		return fmt.Errorf(
+			"rebuild from snapshots: %w",
+			err,
+		)
+	}
+
+	s.lastIndexedRecordID = r.m.LastIndexedRecordID
+	s.lastUpdate = r.m.CreatedAt
+
+	return nil
 }
