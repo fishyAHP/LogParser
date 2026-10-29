@@ -7,5 +7,3 @@ limit_heap.pprof
 old_heap.pprof
 query_heap.pprof
 arch.jsonl
-internal/features/storage/snapshot/load.go.bak
-internal/features/storage/snapshot/load_test.go.bak

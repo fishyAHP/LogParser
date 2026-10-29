@@ -6,6 +6,8 @@ import (
 	"iter"
 	"os"
 	"path/filepath"
+	"reflect"
+	"strings"
 	"testing"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
@@ -147,5 +149,135 @@ func TestStoreSaveSnapshotError(t *testing.T) {
 
 	if store.lastIndexedRecordID != 0 || !store.lastUpdate.IsZero() {
 		t.Fatal("store state changed after failed save")
+	}
+}
+
+type testRebuilder struct {
+	snapshots []index.Snapshot
+}
+
+func (r *testRebuilder) FromSnapshots(
+	snapshots iter.Seq2[index.Snapshot, error],
+) error {
+	for snapshot, err := range snapshots {
+		if err != nil {
+			return err
+		}
+
+		r.snapshots = append(r.snapshots, snapshot)
+	}
+
+	return nil
+}
+
+func TestStoreSaveLoad(t *testing.T) {
+	dir := t.TempDir()
+
+	store := &Store{path: dir}
+
+	expected := []index.Snapshot{
+		{
+			Name: "hash",
+			Data: []byte("hash index data"),
+		},
+		{
+			Name: "range",
+			Data: []byte("range index data"),
+		},
+		{
+			Name: "text",
+			Data: []byte("text index data"),
+		},
+	}
+
+	snapshots := func(yield func(index.Snapshot, error) bool) {
+		for _, snapshot := range expected {
+			if !yield(snapshot, nil) {
+				return
+			}
+		}
+	}
+
+	const lastRecordID = 100
+
+	if err := store.Save(snapshots, lastRecordID); err != nil {
+		t.Fatalf("save snapshots: %v", err)
+	}
+
+	// Имитируем перезапуск приложения.
+	restoredStore := &Store{path: dir}
+
+	rebuilder := &testRebuilder{}
+
+	if err := restoredStore.Load(rebuilder); err != nil {
+		t.Fatalf("load snapshots: %v", err)
+	}
+
+	if !reflect.DeepEqual(rebuilder.snapshots, expected) {
+		t.Errorf(
+			"restored snapshots mismatch:\ngot:  %#v\nwant: %#v",
+			rebuilder.snapshots,
+			expected,
+		)
+	}
+
+	if restoredStore.lastIndexedRecordID != lastRecordID {
+		t.Errorf(
+			"last indexed record ID: got %d, want %d",
+			restoredStore.lastIndexedRecordID,
+			lastRecordID,
+		)
+	}
+}
+
+func TestStoreLoadCorruptedIndex(t *testing.T) {
+	dir := t.TempDir()
+	store := &Store{path: dir}
+
+	snapshots := func(yield func(index.Snapshot, error) bool) {
+		yield(index.Snapshot{
+			Name: "hash",
+			Data: []byte("original index data"),
+		}, nil)
+	}
+
+	if err := store.Save(snapshots, 100); err != nil {
+		t.Fatal(err)
+	}
+
+	snapshotDir := filepath.Join(dir, "snapshot-0001")
+
+	r := &reader{dir: snapshotDir}
+	if err := r.readManifest(); err != nil {
+		t.Fatal(err)
+	}
+
+	for info := range r.m.Indexes() {
+		path := filepath.Join(snapshotDir, info.Filename)
+
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// Меняем один байт, сохраняя размер файла.
+		data[0] ^= 0xFF
+
+		if err := os.WriteFile(path, data, 0600); err != nil {
+			t.Fatal(err)
+		}
+
+		break
+	}
+
+	rebuilder := &testRebuilder{}
+
+	err := store.Load(rebuilder)
+	if err == nil {
+		t.Fatal("expected checksum error, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "checksum mismatch") {
+		t.Errorf("unexpected error: %v", err)
 	}
 }
