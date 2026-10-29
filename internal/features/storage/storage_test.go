@@ -41,7 +41,7 @@ func TestStorage_New(t *testing.T) {
 			t.Fatal("write segment is nil")
 		}
 
-		if !s.writeSegment.isOpen() {
+		if !s.writeSegment.IsOpen() {
 			t.Error("write segment should be open")
 		}
 
@@ -77,7 +77,7 @@ func TestStorage_RotationSegment(t *testing.T) {
 		)
 	}
 
-	if !s.writeSegment.isOpen() {
+	if !s.writeSegment.IsOpen() {
 		t.Error("new write segment should be open")
 	}
 }
@@ -97,11 +97,11 @@ func TestStorage_RotationClosesOldSegment(t *testing.T) {
 		t.Fatalf("rotation: %v", err)
 	}
 
-	if oldSegment.isOpen() {
+	if oldSegment.IsOpen() {
 		t.Error("old segment should be closed")
 	}
 
-	if !s.writeSegment.isOpen() {
+	if !s.writeSegment.IsOpen() {
 		t.Error("new segment should be open")
 	}
 }
@@ -118,11 +118,11 @@ func TestStorage_Close(t *testing.T) {
 		t.Fatalf("close storage: %v", err)
 	}
 
-	if s.writeSegment.isOpen() {
+	if s.writeSegment.IsOpen() {
 		t.Error("write segment should be closed")
 	}
 
-	if s.readSegment.isOpen() {
+	if s.readSegment.IsOpen() {
 		t.Error("read segment should be closed")
 	}
 }
@@ -344,12 +344,12 @@ func TestStorageMissingSegment(t *testing.T) {
 	dir := t.TempDir()
 
 	for _, id := range []uint64{1, 3} {
-		seg, err := segments.newSegment(dir, id, writeFlag)
+		seg, err := segments.NewSegment(dir, id, writeFlag)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		if err := seg.close(); err != nil {
+		if err := seg.Close(); err != nil {
 			t.Fatal(err)
 		}
 	}

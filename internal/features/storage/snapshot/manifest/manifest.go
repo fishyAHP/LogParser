@@ -42,6 +42,10 @@ func (m *Manifest) AddIndex(
 	return nil
 }
 
+func (m *Manifest) IndexCount() int {
+	return len(m.indexes)
+}
+
 func (m *Manifest) MarshalBinary() ([]byte, error) {
 	h, err := m.header()
 	if err != nil {

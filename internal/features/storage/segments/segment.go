@@ -74,7 +74,7 @@ func NewSegment(
 			)
 		}
 	} else {
-		if err = validateFileHeader(
+		if err = ValidateFileHeader(
 			file,
 		); err != nil {
 			return nil, fmt.Errorf(
@@ -116,7 +116,7 @@ func writeFileHeader(file *os.File) error {
 	return nil
 }
 
-func validateFileHeader(file *os.File) error {
+func ValidateFileHeader(file *os.File) error {
 	buf := make([]byte, len(Magic))
 	n, err := file.ReadAt(buf, 0)
 	if err != nil {

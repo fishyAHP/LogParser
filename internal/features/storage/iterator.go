@@ -148,7 +148,7 @@ func openFile(dir string, curID uint64) (*os.File, error) {
 		)
 	}
 
-	err = segments.validateFileHeader(file)
+	err = segments.ValidateFileHeader(file)
 	if err != nil {
 		_ = file.Close()
 		return nil, fmt.Errorf(
