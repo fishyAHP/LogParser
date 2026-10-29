@@ -4,7 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"iter"
+	"math"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -36,37 +38,14 @@ func NewStore(
 		)
 	}
 
-	store := &Store{
+	return &Store{
 		path: path,
-	}
-
-	m, err := store.readLatest(
-		func(snapshots iter.Seq2[index.Snapshot, error]) error {
-			for _, err := range snapshots {
-				if err != nil {
-					return err
-				}
-			}
-			return nil
-		},
-	)
-	if errors.Is(err, ErrNoSnapshots) {
-		return store, nil
-	}
-	if err != nil {
-		return nil, fmt.Errorf(
-			"open snapshot store: %w",
-			err,
-		)
-	}
-
-	store.lastIndexedRecordID = m.LastIndexedRecordID
-	store.lastUpdate = m.CreatedAt
-
-	return store, nil
+	}, nil
 }
 
-func findLastSnapshot(dir string) (uint32, error) {
+func findLastSnapshot(
+	dir string,
+) (uint32, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return 0, fmt.Errorf(
@@ -135,37 +114,106 @@ func findLastSnapshot(dir string) (uint32, error) {
 func (s *Store) Save(
 	snapshots iter.Seq2[index.Snapshot, error],
 	lastRecordID domain.RecordID,
-) error {
+) (err error) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 
-	generation, err := s.nextGeneration()
+	generation, err := findLastSnapshot(s.path)
 	if err != nil {
 		return fmt.Errorf(
-			"create new manifest generation: %w",
+			"find last snapshot: %w",
 			err,
 		)
 	}
 
-	metadata, err := s.writeGeneration(
-		generation,
-		snapshots,
+	if generation == math.MaxUint32 {
+		return errors.New(
+			"snapshot generation overflow",
+		)
+	}
+	generation++
+
+	w, err := s.writer(
 		lastRecordID,
+		generation,
 	)
 	if err != nil {
+		return err
+	}
+	defer func() {
+		err = errors.Join(err, os.RemoveAll(w.tmpDir))
+	}()
+
+	for snapshot, snapshotErr := range snapshots {
+		if snapshotErr != nil {
+			return fmt.Errorf(
+				"snapshots error: %w",
+				snapshotErr,
+			)
+		}
+
+		if err = w.writeIndex(
+			snapshot.Name,
+			snapshot.Data,
+		); err != nil {
+			return fmt.Errorf(
+				"write index: %w",
+				err,
+			)
+		}
+	}
+
+	if err = w.writeManifest(); err != nil {
 		return fmt.Errorf(
-			"write generation snapshots: %w",
+			"write manifest: %w",
 			err,
 		)
 	}
 
-	s.lastIndexedRecordID = metadata
-	s.lastUpdate = metadata.
+	if err = w.publish(); err != nil {
+		return fmt.Errorf(
+			"publish manifest with indexes: %w",
+			err,
+		)
+	}
+
+	s.lastIndexedRecordID = lastRecordID
+	s.lastUpdate = w.m.CreatedAt
+
+	return nil
 }
 
-func (s *Store) nextGeneration() (manifest.Manifest, error) {
+func (s *Store) writer(
+	lastRecordID domain.RecordID,
+	generation uint32,
+) (*writer, error) {
+	tmpDir, err := os.MkdirTemp(
+		s.path,
+		"temp-snapshot-",
+	)
+	if err != nil {
+		return nil, fmt.Errorf(
+			"make tmp dir: %w",
+			err,
+		)
+	}
 
+	finalDir := filepath.Join(
+		s.path,
+		fmt.Sprintf("snapshot-%04d", generation),
+	)
+
+	m := manifest.Manifest{
+		Version:             manifest.Version1,
+		Generation:          generation,
+		LastIndexedRecordID: lastRecordID,
+		CreatedAt:           time.Now().UTC(),
+		Indexes:             nil,
+	}
+
+	return &writer{
+		tmpDir:   tmpDir,
+		finalDir: finalDir,
+		m:        m,
+	}, nil
 }
-
-
-
