@@ -8,6 +8,7 @@ import (
 	"fishyAHP/LogParser.git/internal/core/domain"
 	"fishyAHP/LogParser.git/internal/features/aggregation"
 	"fishyAHP/LogParser.git/internal/features/aggregation/interfaces"
+	"fishyAHP/LogParser.git/internal/features/metadata"
 	"fishyAHP/LogParser.git/internal/features/parse/common"
 	"fishyAHP/LogParser.git/internal/features/query/execution"
 	"fishyAHP/LogParser.git/internal/features/query/iterators"
@@ -32,7 +33,7 @@ func NewEngine(
 	creator Store,
 	parser common.ParseProjection,
 	manager execution.IndexReader,
-	catalog *domain.FieldsCatalog,
+	catalog *metadata.FieldsCatalog,
 ) (*Engine, error) {
 	if creator == nil {
 		return nil, errors.New(

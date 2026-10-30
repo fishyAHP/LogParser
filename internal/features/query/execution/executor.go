@@ -8,11 +8,12 @@ import (
 
 	"fishyAHP/LogParser.git/internal/core/domain"
 	"fishyAHP/LogParser.git/internal/features/index/common"
+	"fishyAHP/LogParser.git/internal/features/metadata"
 )
 
 type Executor struct {
 	Indexes IndexReader
-	catalog *domain.FieldsCatalog
+	catalog *metadata.FieldsCatalog
 
 	lexer    *lexer
 	semantic *semanticAnalyzer
@@ -32,7 +33,7 @@ type IndexReader interface {
 
 func NewExecutor(
 	indexes IndexReader,
-	catalog *domain.FieldsCatalog,
+	catalog *metadata.FieldsCatalog,
 ) (*Executor, error) {
 	if indexes == nil {
 		return nil, errors.New(

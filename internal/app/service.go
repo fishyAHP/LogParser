@@ -11,12 +11,13 @@ import (
 
 	"fishyAHP/LogParser.git/internal/core/domain"
 	"fishyAHP/LogParser.git/internal/features/index"
+	"fishyAHP/LogParser.git/internal/features/metadata"
+	"fishyAHP/LogParser.git/internal/features/metadata/snapshot"
 	"fishyAHP/LogParser.git/internal/features/parse"
 	"fishyAHP/LogParser.git/internal/features/query"
 	"fishyAHP/LogParser.git/internal/features/query/iterators"
 	"fishyAHP/LogParser.git/internal/features/storage"
 	"fishyAHP/LogParser.git/internal/features/storage/segments"
-	"fishyAHP/LogParser.git/internal/features/storage/snapshot"
 )
 
 type Service struct {
@@ -24,7 +25,7 @@ type Service struct {
 	engine        *query.Engine
 	parser        *parse.LogParser
 	storage       *storage.Storage
-	catalog       *domain.FieldsCatalog
+	catalog       *metadata.FieldsCatalog
 	snapshotStore *snapshot.Store
 
 	lastIndexedID domain.RecordID
@@ -61,7 +62,7 @@ func newService(
 		)
 	}
 
-	catalog := domain.NewCatalog()
+	catalog := metadata.NewCatalog()
 
 	start := time.Now()
 	store, err := storage.New(

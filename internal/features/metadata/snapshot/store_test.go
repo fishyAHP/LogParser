@@ -12,7 +12,7 @@ import (
 
 	"fishyAHP/LogParser.git/internal/core/domain"
 	"fishyAHP/LogParser.git/internal/features/index"
-	"fishyAHP/LogParser.git/internal/features/storage/snapshot/manifest"
+	"fishyAHP/LogParser.git/internal/features/metadata/snapshot/manifest"
 )
 
 func snapshotSeq(items ...index.Snapshot) iter.Seq2[index.Snapshot, error] {

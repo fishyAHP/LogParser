@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
+	"fishyAHP/LogParser.git/internal/features/metadata"
 )
 
 type semanticAnalyzer struct {
@@ -63,7 +64,7 @@ func isAllowed(allowed, op CompareOperator) bool {
 
 func (s *semanticAnalyzer) analyze(
 	query query,
-	catalog *domain.FieldsCatalog,
+	catalog *metadata.FieldsCatalog,
 ) (TypedQuery, error) {
 	if err := s.analyzeFields(
 		query.Projection,
@@ -98,7 +99,7 @@ func (s *semanticAnalyzer) analyze(
 
 func (s *semanticAnalyzer) analyzeFields(
 	fields []SelectExpr,
-	catalog *domain.FieldsCatalog,
+	catalog *metadata.FieldsCatalog,
 ) error {
 	var hasAggregate, hasField bool
 
