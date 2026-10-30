@@ -12,21 +12,22 @@ import (
 	"fishyAHP/LogParser.git/internal/core/domain"
 	"fishyAHP/LogParser.git/internal/features/index"
 	"fishyAHP/LogParser.git/internal/features/metadata"
-	"fishyAHP/LogParser.git/internal/features/metadata/snapshot"
 	"fishyAHP/LogParser.git/internal/features/parse"
 	"fishyAHP/LogParser.git/internal/features/query"
 	"fishyAHP/LogParser.git/internal/features/query/iterators"
+	"fishyAHP/LogParser.git/internal/features/snapshot"
 	"fishyAHP/LogParser.git/internal/features/storage"
 	"fishyAHP/LogParser.git/internal/features/storage/segments"
 )
 
 type Service struct {
-	index         *index.Manager
-	engine        *query.Engine
-	parser        *parse.LogParser
-	storage       *storage.Storage
-	catalog       *metadata.FieldsCatalog
-	snapshotStore *snapshot.Store
+	index   *index.Manager
+	engine  *query.Engine
+	parser  *parse.LogParser
+	storage *storage.Storage
+	catalog *metadata.FieldsCatalog
+
+	metadata *Metadata
 
 	lastIndexedID domain.RecordID
 }
@@ -99,6 +100,12 @@ func newService(
 		)
 	}
 
+	meta := NewMetadata(
+		catalog,
+		snapshotStore,
+		idx,
+	)
+
 	parser := parse.NewParser(scheme, format)
 
 	engine, err := query.NewEngine(
@@ -116,12 +123,12 @@ func newService(
 	}
 
 	service := &Service{
-		parser:        parser,
-		storage:       store,
-		index:         idx,
-		engine:        engine,
-		catalog:       catalog,
-		snapshotStore: snapshotStore,
+		parser:   parser,
+		storage:  store,
+		index:    idx,
+		engine:   engine,
+		catalog:  catalog,
+		metadata: meta,
 	}
 
 	if err = service.rebuildMetadata(); err != nil {
@@ -153,7 +160,7 @@ func (s *Service) RebuildIndexes() error {
 func (s *Service) rebuildMetadata() error {
 	start := time.Now()
 
-	if err := s.snapshotStore.Load(s.index); err != nil {
+	if err := s.metadata.Load(); err != nil {
 		if !errors.Is(err, snapshot.ErrNoSnapshots) {
 			return fmt.Errorf(
 				"load indexes: %w",
@@ -165,14 +172,18 @@ func (s *Service) rebuildMetadata() error {
 	fmt.Println("Snapshot load:", time.Since(start))
 	start = time.Now()
 
-	lastIndexedID, _ := s.snapshotStore.Checkpoint()
+	lastIndexedID := s.metadata.Checkpoint()
 	s.lastIndexedID = lastIndexedID
 
-	var reindexed int
 	fmt.Printf("Loaded checkpoint: %d\n", lastIndexedID)
 
 	iter := s.storage.Iterator()
+	var reindexed int
 	for iter.Next() {
+		if iter.RecordID() <= lastIndexedID {
+			continue
+		}
+
 		data := iter.Data()
 
 		parsed, err := s.parser.Parse(data)
@@ -183,13 +194,6 @@ func (s *Service) rebuildMetadata() error {
 			)
 		}
 
-		s.catalog.Add(parsed.Fields...)
-
-		if iter.RecordID() <= lastIndexedID {
-			continue
-		}
-
-		reindexed++
 		if err := s.index.Index(
 			iter.RecordID(),
 			parsed.Entry,
@@ -200,6 +204,8 @@ func (s *Service) rebuildMetadata() error {
 			)
 		}
 
+		reindexed++
+		s.catalog.Add(parsed.Fields...)
 		s.lastIndexedID = iter.RecordID()
 	}
 
@@ -309,8 +315,7 @@ func (s *Service) Close() error {
 }
 
 func (s *Service) Save() error {
-	if err := s.snapshotStore.Save(
-		s.index.MakeSnapshots(),
+	if err := s.metadata.Save(
 		s.lastIndexedID,
 	); err != nil {
 		return fmt.Errorf(

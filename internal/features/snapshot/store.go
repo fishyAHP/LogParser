@@ -14,7 +14,7 @@ import (
 
 	"fishyAHP/LogParser.git/internal/core/domain"
 	"fishyAHP/LogParser.git/internal/features/index"
-	"fishyAHP/LogParser.git/internal/features/metadata/snapshot/manifest"
+	"fishyAHP/LogParser.git/internal/features/snapshot/manifest"
 )
 
 var ErrNoSnapshots = errors.New("no snapshots in directory")

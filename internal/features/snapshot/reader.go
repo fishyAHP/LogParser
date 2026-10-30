@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 
 	"fishyAHP/LogParser.git/internal/features/index"
-	"fishyAHP/LogParser.git/internal/features/metadata/snapshot/manifest"
+	"fishyAHP/LogParser.git/internal/features/snapshot/manifest"
 )
 
 type reader struct {

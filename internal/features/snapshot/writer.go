@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"fishyAHP/LogParser.git/internal/features/metadata/snapshot/manifest"
+	"fishyAHP/LogParser.git/internal/features/snapshot/manifest"
 	"fishyAHP/LogParser.git/internal/features/storage/segments"
 )
 
