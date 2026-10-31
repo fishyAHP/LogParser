@@ -11,6 +11,7 @@ import (
 	"fishyAHP/LogParser.git/internal/core/errors"
 	"fishyAHP/LogParser.git/internal/features/aggregation/interfaces"
 	"fishyAHP/LogParser.git/internal/features/index/common"
+	"fishyAHP/LogParser.git/internal/features/storage/segments"
 )
 
 type Manager struct {
@@ -297,9 +298,9 @@ func (m *Manager) FromSnapshots(
 		}
 
 		fmt.Printf(
-			"Index %s: size=%d MB, load=%s\n",
+			"Index %s: size=%s, load=%s\n",
 			snapshot.Name,
-			len(snapshot.Data)/(1024*1024),
+			segments.FileSize(len(snapshot.Data)),
 			time.Since(start),
 		)
 

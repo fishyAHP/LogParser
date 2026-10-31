@@ -5,6 +5,7 @@ import (
 	"iter"
 	"time"
 
+	"fishyAHP/LogParser.git/internal/core/binaryio"
 	"fishyAHP/LogParser.git/internal/core/domain"
 	"fishyAHP/LogParser.git/internal/features/storage/segments"
 )
@@ -51,50 +52,43 @@ func (m *Manifest) MarshalBinary() ([]byte, error) {
 	h, err := m.header()
 	if err != nil {
 		return nil, fmt.Errorf(
-			"create manifest header: %w",
-			err,
+			"create manifest header: %w", err,
 		)
 	}
 
-	data, err := h.MarshalBinary()
+	encoder, err := binaryio.NewEncoder(headerSize)
 	if err != nil {
-		return nil, fmt.Errorf(
-			"header binary marshal: %w",
-			err,
-		)
+		return nil, err
 	}
+
+	h.EncodeTo(encoder)
 
 	for _, idx := range m.indexes {
-		indexData, err := idx.MarshalBinary()
-		if err != nil {
+		if err := idx.EncodeTo(encoder); err != nil {
 			return nil, fmt.Errorf(
-				"index %q binary marshal: %w",
-				idx.name,
-				err,
+				"encode index %q: %w",
+				idx.name, err,
 			)
 		}
-
-		data = append(data, indexData...)
 	}
 
-	return data, nil
+	return encoder.Result(), nil
 }
 
-func (m *Manifest) UnmarshalBinary(
-	data []byte,
-) error {
+func (m *Manifest) UnmarshalBinary(data []byte) error {
+	decoder := binaryio.NewDecoder(data)
+
 	var h header
-	if err := h.UnmarshalBinary(
-		data,
-	); err != nil {
+	if err := h.DecodeFrom(decoder); err != nil {
 		return fmt.Errorf(
-			"manifest header binary unmarshal: %w",
-			err,
+			"decode manifest header: %w", err,
 		)
 	}
 
-	remaining := len(data) - headerSize
-	if uint64(h.indexCount) > uint64(remaining/44) {
+	const minIndexSize = 2 + 2 + 8 + 32
+
+	if uint64(h.indexCount) >
+		uint64(decoder.Remaining()/minIndexSize) {
 		return fmt.Errorf(
 			"index count %d exceeds available data",
 			h.indexCount,
@@ -102,33 +96,22 @@ func (m *Manifest) UnmarshalBinary(
 	}
 
 	indexes := make([]indexManifest, 0, h.indexCount)
-	offset := headerSize
 
-	for range int(h.indexCount) {
+	for n := range h.indexCount {
 		var idx indexManifest
 
-		if err := idx.UnmarshalBinary(
-			data[offset:],
-		); err != nil {
+		if err := idx.DecodeFrom(decoder); err != nil {
 			return fmt.Errorf(
-				"index manifest binary unmarshaling: %w",
-				err,
+				"decode index %d: %w", n, err,
 			)
 		}
-
-		consumed := 2 + len(idx.name) +
-			2 + len(idx.filename) +
-			8 + 32
-
-		offset += consumed
 
 		indexes = append(indexes, idx)
 	}
 
-	if offset != len(data) {
+	if err := decoder.Finish(); err != nil {
 		return fmt.Errorf(
-			"trailing data in manifest: %d bytes",
-			len(data)-offset,
+			"finish manifest decoding: %w", err,
 		)
 	}
 

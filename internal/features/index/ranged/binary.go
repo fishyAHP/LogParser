@@ -1,10 +1,7 @@
 package ranged
 
 import (
-	"errors"
 	"fmt"
-	"io"
-	"iter"
 
 	indexbin "fishyAHP/LogParser.git/internal/features/index/binary"
 	"fishyAHP/LogParser.git/internal/features/index/structs"
@@ -35,84 +32,63 @@ func (i *Index[K]) MarshalBinary() ([]byte, error) {
 }
 
 func (i *Index[K]) UnmarshalBinary(data []byte) error {
-	tmp := New(i.tree.compare)
-
-	var header indexbin.Header
-	if err := header.UnmarshalBinary(data); err != nil {
-		return fmt.Errorf("unmarshal header: %w", err)
+	decoder, err := indexbin.NewDecoder(
+		data,
+		indexbin.DecodeKey[K],
+	)
+	if err != nil {
+		return fmt.Errorf("create index decoder: %w", err)
 	}
 
-	next, stop := iter.Pull2(
-		indexbin.IterateIndex(
-			data,
-			indexbin.DecodeKey[K],
-		),
-	)
-	defer stop()
+	tmp := New(i.tree.compare)
+
+	header := decoder.Header()
 
 	var (
 		previous K
 		hasPrev  bool
-		total    uint64
 	)
 
-	err := tmp.tree.buildFromSorted(
+	next := func() (K, *structs.PostingList, error) {
+		key, posting, err := decoder.Next()
+		if err != nil {
+			return key, nil, err
+		}
+
+		if hasPrev && tmp.tree.compare(previous, key) >= 0 {
+			var zero K
+			return zero, nil, fmt.Errorf(
+				"duplicate or unordered key: %v",
+				key,
+			)
+		}
+
+		previous = key
+		hasPrev = true
+
+		return key, posting, nil
+	}
+
+	err = tmp.tree.buildFromSorted(
 		int(header.EntriesCount),
-		func() (K, *structs.PostingList, error) {
-			entry, decodeErr, ok := next()
-
-			if decodeErr != nil {
-				var zero K
-				return zero, nil, decodeErr
-			}
-
-			if !ok {
-				var zero K
-				return zero, nil, io.ErrUnexpectedEOF
-			}
-
-			if hasPrev && tmp.tree.compare(previous, entry.Key) >= 0 {
-				var zero K
-				return zero, nil, fmt.Errorf(
-					"unordered or duplicate key",
-				)
-			}
-
-			previous = entry.Key
-			hasPrev = true
-			total += uint64(entry.Posting.Len())
-
-			return entry.Key, entry.Posting, nil
-		},
+		next,
 	)
 	if err != nil {
 		return fmt.Errorf(
-			"build tree: %w",
+			"build tree from snapshot: %w",
 			err,
 		)
 	}
 
-	_, err, ok := next()
-	if err != nil {
+	if err = decoder.Finish(); err != nil {
 		return fmt.Errorf(
-			"finish decoding: %w",
+			"finish index decoding: %w",
 			err,
-		)
-	}
-	if ok {
-		return errors.New("unexpected extra entry")
-	}
-
-	if total != header.RecordsCount {
-		return fmt.Errorf(
-			"records count mismatch: expected=%d, actual=%d",
-			header.RecordsCount,
-			total,
 		)
 	}
 
 	tmp.tree.nodesCount = header.EntriesCount
-	tmp.tree.elemsCount = total
+	tmp.tree.elemsCount = header.RecordsCount
 
 	*i = *tmp
 	return nil

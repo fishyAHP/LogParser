@@ -1,10 +1,12 @@
 package manifest
 
 import (
-	"encoding/binary"
+	"bytes"
 	"errors"
 	"fmt"
 	"math"
+
+	"fishyAHP/LogParser.git/internal/core/binaryio"
 )
 
 type header struct {
@@ -55,114 +57,83 @@ func (m *Manifest) header() (header, error) {
 	}, nil
 }
 
-func (h header) MarshalBinary() ([]byte, error) {
-	data := make([]byte, headerSize)
-	copy(data, h.magic[:])
-
-	offset := len(manifestMagic)
-	binary.BigEndian.PutUint16(
-		data[offset:],
-		h.version,
-	)
-
-	offset += 2
-	binary.BigEndian.PutUint32(
-		data[offset:],
-		h.generation,
-	)
-
-	offset += 4
-	binary.BigEndian.PutUint64(
-		data[offset:],
-		h.lastID,
-	)
-
-	offset += 8
-	binary.BigEndian.PutUint64(
-		data[offset:],
-		uint64(h.createdAt),
-	)
-
-	offset += 8
-	binary.BigEndian.PutUint32(
-		data[offset:],
-		h.indexCount,
-	)
-
-	return data, nil
+func (h header) EncodeTo(e *binaryio.Encoder) {
+	e.Bytes(h.magic[:])
+	e.Uint16(h.version)
+	e.Uint32(h.generation)
+	e.Uint64(h.lastID)
+	e.Uint64(uint64(h.createdAt))
+	e.Uint32(h.indexCount)
 }
 
-func (h *header) UnmarshalBinary(
-	data []byte,
-) error {
+func (h header) MarshalBinary() ([]byte, error) {
+	e, err := binaryio.NewEncoder(headerSize)
+	if err != nil {
+		return nil, err
+	}
+
+	h.EncodeTo(e)
+	return e.Result(), nil
+}
+
+func (h *header) DecodeFrom(d *binaryio.Decoder) error {
 	if h == nil {
-		return errors.New(
-			"nil manifest header",
-		)
+		return errors.New("nil manifest header")
 	}
 
-	if len(data) < headerSize {
-		return fmt.Errorf(
-			"manifest header too short got %d, want %d",
-			len(data),
-			headerSize,
-		)
+	magic, err := d.BytesView(magicLen)
+	if err != nil {
+		return fmt.Errorf("decode magic: %w", err)
 	}
 
-	var magic [magicLen]byte
-	copy(magic[:], data[:magicLen])
-
-	if magic != manifestMagic {
-		return errors.New(
-			"invalid magic numbers",
-		)
+	if !bytes.Equal(magic, manifestMagic[:]) {
+		return errors.New("invalid magic numbers")
 	}
 
-	offset := len(magic)
-	version := binary.BigEndian.Uint16(
-		data[offset:],
-	)
-
+	version, err := d.Uint16()
+	if err != nil {
+		return err
+	}
 	if version != Version1 {
-		return fmt.Errorf(
-			"unsupported manifest version: %d",
-			version,
-		)
+		return fmt.Errorf("unsupported manifest version: %d", version)
 	}
 
-	offset += 2
-	generation := binary.BigEndian.Uint32(
-		data[offset:],
-	)
+	generation, err := d.Uint32()
+	if err != nil {
+		return err
+	}
 	if generation == 0 {
-		return errors.New(
-			"manifest version must be non-zero",
-		)
+		return errors.New("manifest generation must be non-zero")
 	}
 
-	offset += 4
-	lastID := binary.BigEndian.Uint64(
-		data[offset:],
-	)
+	lastID, err := d.Uint64()
+	if err != nil {
+		return err
+	}
 
-	offset += 8
-	createdAt := int64(binary.BigEndian.Uint64(
-		data[offset:],
-	))
+	createdAt, err := d.Uint64()
+	if err != nil {
+		return err
+	}
 
-	offset += 8
-	indexCount := binary.BigEndian.Uint32(
-		data[offset:],
-	)
+	indexCount, err := d.Uint32()
+	if err != nil {
+		return err
+	}
 
 	*h = header{
-		magic:      magic,
+		magic:      manifestMagic,
 		version:    version,
 		generation: generation,
 		lastID:     lastID,
-		createdAt:  createdAt,
+		createdAt:  int64(createdAt),
 		indexCount: indexCount,
 	}
 
 	return nil
+}
+
+func (h *header) UnmarshalBinary(data []byte) error {
+	d := binaryio.NewDecoder(data)
+	return h.DecodeFrom(d)
 }

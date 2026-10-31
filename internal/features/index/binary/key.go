@@ -6,6 +6,7 @@ import (
 	"math"
 	"time"
 
+	"fishyAHP/LogParser.git/internal/core/binaryio"
 	"fishyAHP/LogParser.git/internal/core/domain"
 	"fishyAHP/LogParser.git/internal/features/index/common"
 )
@@ -18,22 +19,14 @@ func EncodeKey[K common.Key](
 		return []byte(k), nil
 
 	case domain.IntValue:
-		data := make([]byte, 8)
-		binary.BigEndian.PutUint64(
-			data,
-			uint64(k),
-		)
-
-		return data, nil
+		return binary.BigEndian.AppendUint64(
+			nil, uint64(k),
+		), nil
 
 	case domain.FloatValue:
-		data := make([]byte, 8)
-		binary.BigEndian.PutUint64(
-			data,
-			math.Float64bits(float64(k)),
-		)
-
-		return data, nil
+		return binary.BigEndian.AppendUint64(
+			nil, math.Float64bits(float64(k)),
+		), nil
 
 	case domain.TimeValue:
 		t := time.Time(k)
@@ -44,8 +37,8 @@ func EncodeKey[K common.Key](
 				err,
 			)
 		}
-
 		return data, nil
+
 	case domain.BoolValue:
 		if k {
 			return []byte{1}, nil
@@ -70,32 +63,44 @@ func DecodeKey[K common.Key](
 		return any(domain.StringValue(data)).(K), nil
 
 	case domain.IntValue:
-		if len(data) != 8 {
+		decoder := binaryio.NewDecoder(data)
+
+		value, err := decoder.Uint64()
+		if err != nil {
 			return zero, fmt.Errorf(
-				"invalid int key length: %d",
-				len(data),
+				"decode int key: %w",
+				err,
 			)
 		}
 
-		value := domain.IntValue(
-			binary.BigEndian.Uint64(data),
-		)
-		return any(value).(K), nil
+		if err = decoder.Finish(); err != nil {
+			return zero, fmt.Errorf(
+				"invalid int key: %w",
+				err,
+			)
+		}
+		return any(domain.IntValue(value)).(K), nil
 
 	case domain.FloatValue:
-		if len(data) != 8 {
+		decoder := binaryio.NewDecoder(data)
+
+		bits, err := decoder.Uint64()
+		if err != nil {
 			return zero, fmt.Errorf(
-				"invalid float key value: %d",
-				len(data),
+				"decode float key: %w",
+				err,
 			)
 		}
 
-		bits := binary.BigEndian.Uint64(data)
-		value := domain.FloatValue(
-			math.Float64frombits(bits),
-		)
-
-		return any(value).(K), nil
+		if err = decoder.Finish(); err != nil {
+			return zero, fmt.Errorf(
+				"invalid float key: %w",
+				err,
+			)
+		}
+		return any(
+			domain.FloatValue(math.Float64frombits(bits)),
+		).(K), nil
 
 	case domain.TimeValue:
 		var t time.Time

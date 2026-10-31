@@ -1,9 +1,9 @@
 package indexbin
 
 import (
-	"bytes"
-	"encoding/binary"
 	"fmt"
+
+	"fishyAHP/LogParser.git/internal/core/binaryio"
 )
 
 type BinaryEntry struct {
@@ -43,114 +43,73 @@ func (b BinaryEntry) validate() error {
 }
 
 func (b BinaryEntry) MarshalBinary() ([]byte, error) {
-	if err := b.validate(); err != nil {
-		return nil, fmt.Errorf(
-			"binary entry validate: %w",
-			err,
-		)
-	}
-
-	var buf bytes.Buffer
-	buf.Grow(
+	encoder, err := binaryio.NewEncoder(
 		KeyLengthSize +
 			len(b.Key) +
 			RecordsCountSize +
 			len(b.Records),
 	)
-
-	if err := binary.Write(
-		&buf,
-		binary.BigEndian,
-		b.KeyLength,
-	); err != nil {
-		return nil, fmt.Errorf(
-			"binary write key length: %w",
-			err,
-		)
+	if err != nil {
+		return nil, err
 	}
 
-	if _, err := buf.Write(b.Key); err != nil {
-		return nil, fmt.Errorf(
-			"buffer write key: %w",
-			err,
-		)
+	if err := b.EncodeTo(encoder); err != nil {
+		return nil, err
 	}
 
-	if err := binary.Write(
-		&buf,
-		binary.BigEndian,
-		b.RecordsCount,
-	); err != nil {
-		return nil, fmt.Errorf(
-			"binary write records count: %w",
-			err,
-		)
-	}
-
-	if _, err := buf.Write(b.Records); err != nil {
-		return nil, fmt.Errorf(
-			"buffer write records: %w",
-			err,
-		)
-	}
-
-	return buf.Bytes(), nil
+	return encoder.Result(), nil
 }
 
 func (b *BinaryEntry) UnmarshalBinary(
 	data []byte,
 ) error {
-	dataLength := len(data)
-	if KeyLengthSize > dataLength {
+	decoder := binaryio.NewDecoder(data)
+
+	keyLength, err := decoder.Uint32()
+	if err != nil {
 		return fmt.Errorf(
-			"key size must be shorter than data: %d",
-			KeyLengthSize,
+			"decode key length: %w",
+			err,
 		)
 	}
 
-	keyLength := binary.BigEndian.Uint32(
-		data[:KeyLengthSize],
-	)
-
-	if uint64(keyLength) > uint64(dataLength-KeyLengthSize) {
+	if uint64(keyLength) > uint64(decoder.Remaining()) {
 		return fmt.Errorf(
 			"invalid ley length: %d",
 			keyLength,
 		)
 	}
-	keyEnd := KeyLengthSize + int(keyLength)
-	if dataLength-keyEnd < RecordsCountSize {
+
+	key, err := decoder.BytesView(int(keyLength))
+	if err != nil {
 		return fmt.Errorf(
-			"truncated records count: %d",
-			keyEnd+dataLength,
+			"decode key: %w",
+			err,
 		)
 	}
 
-	key := data[KeyLengthSize:keyEnd]
-	recordsCountEnd := keyEnd + RecordsCountSize
-
-	if recordsCountEnd > len(data) {
+	recordsCount, err := decoder.Uint64()
+	if err != nil {
 		return fmt.Errorf(
-			"end of records count more than len data: %d",
-			recordsCountEnd,
+			"decoder records count: %w",
+			err,
 		)
 	}
 
-	recordsCount := binary.BigEndian.Uint64(
-		data[keyEnd:recordsCountEnd],
-	)
-
-	if recordsCount > uint64(
-		(dataLength-recordsCountEnd)/8,
-	) {
+	if recordsCount > uint64(decoder.Remaining()/8) {
 		return fmt.Errorf(
 			"invalid records count: %d",
 			recordsCount,
 		)
 	}
 
-	recordsEnd := recordsCountEnd + int(recordsCount)*8
-	records := data[recordsCountEnd:recordsEnd]
+	records, err := decoder.BytesView(int(recordsCount * 8))
+	if err != nil {
+		return fmt.Errorf(
+			"decode records: %w",
+			err,
+		)
+	}
 
 	tmp := BinaryEntry{
 		KeyLength:    keyLength,
@@ -167,6 +126,24 @@ func (b *BinaryEntry) UnmarshalBinary(
 	}
 
 	*b = tmp
+
+	return nil
+}
+
+func (b BinaryEntry) EncodeTo(
+	encoder *binaryio.Encoder,
+) error {
+	if err := b.validate(); err != nil {
+		return fmt.Errorf(
+			"binary entry validate: %w",
+			err,
+		)
+	}
+
+	encoder.Uint32(b.KeyLength)
+	encoder.Bytes(b.Key)
+	encoder.Uint64(b.RecordsCount)
+	encoder.Bytes(b.Records)
 
 	return nil
 }

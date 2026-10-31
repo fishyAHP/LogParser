@@ -161,12 +161,18 @@ func (s *Service) rebuildMetadata() error {
 	start := time.Now()
 
 	if err := s.metadata.Load(); err != nil {
-		if !errors.Is(err, snapshot.ErrNoSnapshots) {
+		if !errors.Is(err, snapshot.ErrNoSnapshots) &&
+			!errors.Is(err, snapshot.ErrNoValidSnapshots){
 			return fmt.Errorf(
 				"load indexes: %w",
 				err,
 			)
 		}
+
+		fmt.Println("No valid snapshots, rebuilding metadata from storage")
+
+		s.index.Clear()
+		s.catalog.Clear()
 	}
 
 	fmt.Println("Snapshot load:", time.Since(start))
@@ -177,7 +183,7 @@ func (s *Service) rebuildMetadata() error {
 
 	fmt.Printf("Loaded checkpoint: %d\n", lastIndexedID)
 
-	iter, err := s.storage.IteratorFromID(lastIndexedID)
+	iter, err := s.storage.IteratorFromID(lastIndexedID+1)
 	if err != nil {
 		return fmt.Errorf(
 			"create iterator from id: %w",
@@ -187,10 +193,6 @@ func (s *Service) rebuildMetadata() error {
 
 	var reindexed int
 	for iter.Next() {
-		if iter.RecordID() <= lastIndexedID {
-			continue
-		}
-
 		data := iter.Data()
 
 		parsed, err := s.parser.Parse(data)

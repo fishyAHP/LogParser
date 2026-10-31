@@ -1,8 +1,9 @@
 package indexbin
 
 import (
-	"encoding/binary"
 	"fmt"
+
+	"fishyAHP/LogParser.git/internal/core/binaryio"
 )
 
 const (
@@ -16,43 +17,45 @@ type Header struct {
 }
 
 func (h *Header) MarshalBinary() ([]byte, error) {
-	data := make([]byte, HeaderSize)
+	encoder, err := binaryio.NewEncoder(HeaderSize)
+	if err != nil {
+		return nil, err
+	}
 
-	binary.BigEndian.PutUint64(
-		data[:RecordsCountSize],
-		h.RecordsCount,
-	)
+	encoder.Uint64(h.RecordsCount)
+	encoder.Uint32(h.EntriesCount)
 
-	binary.BigEndian.PutUint32(
-		data[RecordsCountSize:HeaderSize],
-		h.EntriesCount,
-	)
-
-	return data, nil
+	return encoder.Result(), nil
 }
 
 func (h *Header) UnmarshalBinary(
 	data []byte,
 ) error {
-	if len(data) < HeaderSize {
+	decoder := binaryio.NewDecoder(data)
+
+	recordsCount, err := decoder.Uint64()
+	if err != nil {
 		return fmt.Errorf(
-			"index header too short: got %d, want %d",
-			len(data),
-			HeaderSize,
+			"decode records count: %w",
+			err,
+		)
+	}
+
+	entriesCount, err := decoder.Uint32()
+	if err != nil {
+		return fmt.Errorf(
+			"decode entries count: %w",
+			err,
 		)
 	}
 
 	tmp := Header{
-		RecordsCount: binary.BigEndian.Uint64(
-			data[:RecordsCountSize],
-		),
-		EntriesCount: binary.BigEndian.Uint32(
-			data[RecordsCountSize:HeaderSize],
-		),
+		RecordsCount: recordsCount,
+		EntriesCount: entriesCount,
 	}
 
 	if uint64(tmp.EntriesCount) >
-		uint64(len(data)-HeaderSize)/MinEntrySize {
+		uint64(decoder.Remaining())/MinEntrySize {
 		return fmt.Errorf(
 			"invalid entries count: %d",
 			tmp.EntriesCount,
@@ -60,6 +63,5 @@ func (h *Header) UnmarshalBinary(
 	}
 
 	*h = tmp
-
 	return nil
 }

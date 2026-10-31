@@ -7,6 +7,7 @@ import (
 	"iter"
 	"slices"
 
+	"fishyAHP/LogParser.git/internal/core/binaryio"
 	"fishyAHP/LogParser.git/internal/core/domain"
 )
 
@@ -97,16 +98,16 @@ func (p *PostingList) At(idx int) domain.RecordID {
 }
 
 func (p *PostingList) MarshalBinary() ([]byte, error) {
-	data := make([]byte, len(*p)*8)
-
-	for i, post := range *p {
-		binary.BigEndian.PutUint64(
-			data[i*8:(i+1)*8],
-			uint64(post),
-		)
+	encoder, err := binaryio.NewEncoder(p.Len() * 8)
+	if err != nil {
+		return nil, err
 	}
 
-	return data, nil
+	if err = p.EncodeTo(encoder); err != nil {
+		return nil, err
+	}
+
+	return encoder.Result(), nil
 }
 
 func (p *PostingList) UnmarshalBinary(data []byte) error {
@@ -142,5 +143,25 @@ func (p *PostingList) UnmarshalBinary(data []byte) error {
 	}
 
 	*p = posts
+	return nil
+}
+
+func (p *PostingList) iterator() iter.Seq[domain.RecordID] {
+	return func(yield func(domain.RecordID) bool) {
+		for _, id := range *p {
+			if !yield(id) {
+				return
+			}
+		}
+	}
+}
+
+func (p *PostingList) EncodeTo(
+	encoder *binaryio.Encoder,
+) error {
+	for id := range p.iterator() {
+		encoder.Uint64(uint64(id))
+	}
+
 	return nil
 }

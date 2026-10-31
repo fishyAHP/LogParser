@@ -1,13 +1,12 @@
 package metadata
 
 import (
-	"bytes"
-	"encoding/binary"
-	"errors"
 	"fmt"
 	"math"
 	"sort"
 	"sync"
+
+	"fishyAHP/LogParser.git/internal/core/binaryio"
 )
 
 type FieldsCatalog struct {
@@ -85,25 +84,22 @@ func (f *FieldsCatalog) MarshalBinary() ([]byte, error) {
 	f.mtx.RLock()
 	defer f.mtx.RUnlock()
 
-	var buf bytes.Buffer
-
-	if len(f.catalog) > math.MaxUint32 {
+	if uint64(len(f.catalog)) > math.MaxUint32 {
 		return nil, fmt.Errorf(
 			"too many objects in catalog: %d",
 			len(f.catalog),
 		)
 	}
 
-	if err := binary.Write(
-		&buf,
-		binary.BigEndian,
-		uint32(len(f.catalog)),
-	); err != nil {
+	encoder, err := binaryio.NewEncoder(4)
+	if err != nil {
 		return nil, fmt.Errorf(
-			"write fields count: %w",
+			"create catalog encoder: %w",
 			err,
 		)
 	}
+
+	encoder.Uint32(uint32(len(f.catalog)))
 
 	keys := make([]string, 0, len(f.catalog))
 	for key := range f.catalog {
@@ -113,8 +109,6 @@ func (f *FieldsCatalog) MarshalBinary() ([]byte, error) {
 	sort.Strings(keys)
 
 	for _, key := range keys {
-		count := f.catalog[key]
-
 		if len(key) > math.MaxUint16 {
 			return nil, fmt.Errorf(
 				"field name too long: %d bytes",
@@ -122,54 +116,29 @@ func (f *FieldsCatalog) MarshalBinary() ([]byte, error) {
 			)
 		}
 
-		if err := binary.Write(
-			&buf,
-			binary.BigEndian,
-			uint16(len(key)),
-		); err != nil {
-			return nil, fmt.Errorf(
-				"write key length: %w",
-				err,
-			)
-		}
-
-		if _, err := buf.Write([]byte(key)); err != nil {
-			return nil, fmt.Errorf(
-				"write key: %w",
-				err,
-			)
-		}
-
-		if err := binary.Write(
-			&buf,
-			binary.BigEndian,
-			count,
-		); err != nil {
-			return nil, fmt.Errorf(
-				"write count: %w",
-				err,
-			)
-		}
+		encoder.Uint16(uint16(len(key)))
+		encoder.String(key)
+		encoder.Uint64(f.catalog[key])
 	}
 
-	return buf.Bytes(), nil
+	return encoder.Result(), nil
 }
 
-func (f *FieldsCatalog) UnmarshalBinary(
-	data []byte,
-) error {
+func (f *FieldsCatalog) UnmarshalBinary(data []byte) error {
+	decoder := binaryio.NewDecoder(data)
 
-	if len(data) < 4 {
-		return errors.New(
-			"catalog header truncated",
+	elemsCount, err := decoder.Uint32()
+	if err != nil {
+		return fmt.Errorf(
+			"decode catalog header: %w",
+			err,
 		)
 	}
 
-	elemsCount := binary.BigEndian.Uint32(
-		data[:4],
-	)
+	const minEntrySize = 2 + 8
 
-	if uint64(elemsCount) > uint64(len(data)-4)/10 {
+	if uint64(elemsCount) >
+		uint64(decoder.Remaining()/minEntrySize) {
 		return fmt.Errorf(
 			"invalid catalog elements count: %d",
 			elemsCount,
@@ -178,56 +147,45 @@ func (f *FieldsCatalog) UnmarshalBinary(
 
 	catalog := make(map[string]uint64)
 
-	offset := 4
-
 	for range elemsCount {
-		if len(data)-offset < 2 {
-			return errors.New(
-				"key length truncated",
+		keyLen, err := decoder.Uint16()
+		if err != nil {
+			return fmt.Errorf(
+				"decode key length: %w",
+				err,
 			)
 		}
 
-		keyLen := binary.BigEndian.Uint16(
-			data[offset : offset+2],
-		)
-
-		offset += 2
-
-		if int(keyLen) > len(data)-offset {
-			return errors.New(
-				"key data truncated",
+		key, err := decoder.String(int(keyLen))
+		if err != nil {
+			return fmt.Errorf(
+				"decode key: %w",
+				err,
 			)
 		}
 
-		key := string(data[offset : offset+int(keyLen)])
-
-		if _, ok := catalog[key]; ok {
+		if _, exists := catalog[key]; exists {
 			return fmt.Errorf(
 				"duplicate key: %q",
 				key,
 			)
 		}
 
-		offset += int(keyLen)
-
-		if len(data)-offset < 8 {
-			return errors.New(
-				"field count truncated",
+		count, err := decoder.Uint64()
+		if err != nil {
+			return fmt.Errorf(
+				"decode field count: %w",
+				err,
 			)
 		}
-
-		count := binary.BigEndian.Uint64(
-			data[offset : offset+8],
-		)
-		offset += 8
 
 		catalog[key] = count
 	}
 
-	if offset != len(data) {
+	if err = decoder.Finish(); err != nil {
 		return fmt.Errorf(
-			"unexpected trailing data: %d bytes",
-			len(data)-offset,
+			"finish catalog decoding: %w",
+			err,
 		)
 	}
 

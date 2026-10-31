@@ -1,15 +1,14 @@
 package manifest
 
 import (
-	"bytes"
 	"crypto/sha256"
-	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"math"
 	"strings"
 
+	"fishyAHP/LogParser.git/internal/core/binaryio"
 	"fishyAHP/LogParser.git/internal/features/storage/segments"
 )
 
@@ -38,141 +37,93 @@ func newIndex(
 
 	return idx, nil
 }
-func (i indexManifest) MarshalBinary() ([]byte, error) {
+
+func (i indexManifest) EncodeTo(e *binaryio.Encoder) error {
 	if err := i.validate(); err != nil {
-		return nil, err
+		return err
 	}
 
-	var buf bytes.Buffer
-
-	for _, str := range []string{
-		i.name,
-		i.filename,
-	} {
-		if len(str) > math.MaxUint16 {
-			return nil, fmt.Errorf(
+	for _, value := range []string{i.name, i.filename} {
+		if len(value) > math.MaxUint16 {
+			return fmt.Errorf(
 				"string too long: %d bytes",
-				len(str),
+				len(value),
 			)
 		}
 
-		if err := binary.Write(
-			&buf,
-			binary.BigEndian,
-			uint16(len(str)),
-		); err != nil {
-			return nil, fmt.Errorf(
-				"binary write string len: %w",
-
-				err,
-			)
-		}
-
-		if _, err := buf.Write(
-			[]byte(str),
-		); err != nil {
-			return nil, fmt.Errorf(
-				"buffer write string: %w",
-				err,
-			)
-		}
+		e.Uint16(uint16(len(value)))
+		e.String(value)
 	}
 
-	if err := binary.Write(
-		&buf,
-		binary.BigEndian,
-		uint64(i.size),
-	); err != nil {
-		return nil, fmt.Errorf(
-			"binary write file size: %w",
-			err,
-		)
-	}
+	e.Uint64(uint64(i.size))
 
 	digest, err := hex.DecodeString(i.sha256)
 	if err != nil {
-		return nil, fmt.Errorf(
-			"decode SHA256: %w",
-			err,
-		)
+		return fmt.Errorf("decode SHA256: %w", err)
 	}
 
 	if len(digest) != sha256.Size {
-		return nil, fmt.Errorf(
+		return fmt.Errorf(
 			"invalid SHA256 length: %d",
 			len(digest),
 		)
 	}
 
-	if _, err = buf.Write(digest); err != nil {
-		return nil, fmt.Errorf(
-			"buffer write SHA256: %w",
-			err,
-		)
-	}
-
-	return buf.Bytes(), nil
+	e.Bytes(digest)
+	return nil
 }
 
-func (i *indexManifest) UnmarshalBinary(
-	data []byte,
+func (i indexManifest) MarshalBinary() ([]byte, error) {
+	e, err := binaryio.NewEncoder(0)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := i.EncodeTo(e); err != nil {
+		return nil, err
+	}
+
+	return e.Result(), nil
+}
+
+func (i *indexManifest) DecodeFrom(
+	d *binaryio.Decoder,
 ) error {
-	if len(data) < 2 {
-		return errors.New("data too short for name length")
+	nameLength, err := d.Uint16()
+	if err != nil {
+		return fmt.Errorf("decode name length: %w", err)
 	}
 
-	lenName := binary.BigEndian.Uint16(
-		data[:2],
-	)
-	offset := 2
-
-	end := offset + int(lenName)
-	if len(data) < end {
-		return errors.New("data len too short for name")
+	name, err := d.String(int(nameLength))
+	if err != nil {
+		return fmt.Errorf("decode name: %w", err)
 	}
 
-	name := string(data[offset:end])
-
-	offset = end
-
-	if len(data)-offset < 2 {
-		return errors.New("data too short for filename length")
+	filenameLength, err := d.Uint16()
+	if err != nil {
+		return fmt.Errorf("decode filename length: %w", err)
 	}
 
-	lenFilename := binary.BigEndian.Uint16(data[offset:])
-	offset += 2
-
-	end = offset + int(lenFilename)
-	if len(data) < end {
-		return errors.New("data len too short for filename")
+	filename, err := d.String(int(filenameLength))
+	if err != nil {
+		return fmt.Errorf("decode filename: %w", err)
 	}
 
-	filename := string(data[offset:end])
-
-	offset = end
-
-	end = offset + 8
-	if len(data) < end {
-		return errors.New("data len too short for index snapshot size")
-	}
-	size := binary.BigEndian.Uint64(
-		data[offset:end],
-	)
-
-	offset = end
-	end = offset + 32
-	if len(data) < end {
-		return errors.New("data len too short for SHA256")
+	size, err := d.Uint64()
+	if err != nil {
+		return fmt.Errorf("decode size: %w", err)
 	}
 
-	digest := data[offset:end]
-	sha := hex.EncodeToString(digest)
+	digest, err := d.BytesView(sha256.Size)
+	if err != nil {
+		return fmt.Errorf("decode SHA256: %w", err)
+	}
 
 	tmp := indexManifest{
 		name:     name,
 		filename: filename,
 		size:     segments.FileSize(size),
-		sha256:   sha,
+		sha256:   hex.EncodeToString(digest),
 	}
 
 	if err := tmp.validate(); err != nil {
@@ -181,6 +132,13 @@ func (i *indexManifest) UnmarshalBinary(
 
 	*i = tmp
 	return nil
+}
+
+func (i *indexManifest) UnmarshalBinary(
+	data []byte,
+) error {
+	d := binaryio.NewDecoder(data)
+	return i.DecodeFrom(d)
 }
 
 func (i *indexManifest) validate() error {

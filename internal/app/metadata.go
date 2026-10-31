@@ -84,51 +84,40 @@ func (m *Metadata) Load() error {
 func (m *Metadata) FromSnapshots(
 	snapshots iter.Seq2[index.Snapshot, error],
 ) error {
-	var catalogData []byte
+	var (
+		catalogData    []byte
+		indexSnapshots []index.Snapshot
+	)
 	catalogFound := false
 
-	indexes := func(
-		yield func(index.Snapshot, error) bool) {
-		for s, err := range snapshots {
-			if err != nil {
-				yield(index.Snapshot{}, err)
-				return
-			}
-
-			if s.Name == "catalog" {
-				if catalogFound {
-					yield(index.Snapshot{},
-						errors.New(
-							"duplicate catalog snapshot",
-						),
-					)
-				}
-
-				catalogFound = true
-				catalogData = s.Data
-				continue
-			}
-
-			if !yield(s, nil) {
-				return
-			}
+	for s, err := range snapshots {
+		if err != nil {
+			return fmt.Errorf(
+				"read snapshot: %w",
+				err,
+			)
 		}
-	}
 
-	if err := m.manager.FromSnapshots(
-		indexes,
-	); err != nil {
-		return fmt.Errorf(
-			"restore indexes: %w",
-			err,
-		)
+		if s.Name == "catalog" {
+			if catalogFound {
+				return errors.New("duplicate catalog snapshot")
+			}
+
+			catalogFound = true
+			catalogData = s.Data
+			continue
+		}
+
+		indexSnapshots = append(indexSnapshots, s)
 	}
 
 	if !catalogFound {
-		return snapshot.ErrNoSnapshots
+		return errors.New("catalog snapshot not found")
 	}
 
-	if err := m.catalog.UnmarshalBinary(
+	tmpCatalog := metadata.NewCatalog()
+
+	if err := tmpCatalog.UnmarshalBinary(
 		catalogData,
 	); err != nil {
 		return fmt.Errorf(
@@ -136,6 +125,23 @@ func (m *Metadata) FromSnapshots(
 			err,
 		)
 	}
+
+	if err := m.manager.FromSnapshots(
+		func(yield func(index.Snapshot, error) bool) {
+			for _, s := range indexSnapshots {
+				if !yield(s, nil) {
+					return
+				}
+			}
+		},
+	); err != nil {
+		return fmt.Errorf(
+			"restore indexes: %w",
+			err,
+		)
+	}
+
+	m.catalog = tmpCatalog
 
 	return nil
 }
