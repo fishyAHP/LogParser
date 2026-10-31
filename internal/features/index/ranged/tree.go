@@ -488,3 +488,101 @@ func (t *rbTree[K]) insertPosting(
 		}
 	}
 }
+
+type sortedEntry[K common.Key] struct {
+	key     K
+	posting *structs.PostingList
+}
+
+func (t *rbTree[K]) buildFromSorted(
+	entries []sortedEntry[K],
+) error {
+	var count uint64
+
+	for idx, entry := range entries {
+		if entry.posting == nil ||
+			entry.posting.Len() == 0 {
+			return fmt.Errorf(
+				"empty posting at index %d",
+				idx,
+			)
+		}
+
+		if idx > 0 && t.compare(
+			entries[idx-1].key,
+			entry.key,
+		) >= 0 {
+			return fmt.Errorf(
+				"unordered or duplicate key at index %d",
+				idx,
+			)
+		}
+
+		count += uint64(entry.posting.Len())
+	}
+
+	redLevel := computeRedLevel(len(entries))
+
+	var build func(
+		lo, hi, level int,
+		parent *node[K],
+	) *node[K]
+
+	build = func(
+		start, end, level int,
+		parent *node[K],
+	) *node[K] {
+		if start > end {
+			return nil
+		}
+
+		mid := start + (end-start)/2
+		entry := entries[mid]
+
+		current := newNodeWithPosting(
+			entry.key,
+			entry.posting,
+		)
+
+		current.parent = parent
+		current.color = Black
+
+		if level == redLevel {
+			current.color = Red
+		}
+
+		current.left = build(
+			start,
+			mid-1,
+			level+1,
+			current,
+		)
+
+		current.right = build(
+			mid+1,
+			end,
+			level+1,
+			current,
+		)
+
+		return current
+	}
+
+	root := build(0, len(entries)-1, 0, nil)
+
+	t.root = root
+	t.nodesCount = uint32(len(entries))
+	t.elemsCount = count
+
+	return nil
+}
+
+func computeRedLevel(size int) int {
+	level := 0
+
+	for m := size - 1; m >= 0; m = m/2 - 1 {
+		level++
+	}
+
+	return level
+}

@@ -94,6 +94,11 @@ func New(
 				FieldType: domain.StringType,
 				IndexType: domain.TextIndex,
 			},
+			{
+				Name:      "timestamp",
+				FieldType: domain.TimeType,
+				IndexType: domain.RangeIndex,
+			},
 		},
 	},
 		domain.JSON,

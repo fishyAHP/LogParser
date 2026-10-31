@@ -51,19 +51,24 @@ func (i *storageIterator) Next() bool {
 	curID := i.segmentID
 
 	if i.file == nil {
-		curID = 1
+		if curID == 0 {
+			curID = 1
+			curOffset = uint64(len(segments.Magic))
+		}
+
 		file, err := openFile(dir, curID)
 		if err != nil {
 			i.err = err
+
 			if errors.Is(err, os.ErrNotExist) {
 				i.err = nil
 				i.done = true
 			}
+
 			return false
 		}
 
 		i.file = file
-		curOffset = uint64(len(segments.Magic))
 	}
 
 	for {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"iter"
 	"slices"
+	"time"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
 	"fishyAHP/LogParser.git/internal/core/errors"
@@ -283,6 +284,8 @@ func (m *Manager) FromSnapshots(
 			)
 		}
 
+		start := time.Now()
+
 		if err = unmarshaler.UnmarshalBinary(
 			snapshot.Data,
 		); err != nil {
@@ -292,6 +295,13 @@ func (m *Manager) FromSnapshots(
 				err,
 			)
 		}
+
+		fmt.Printf(
+			"Index %s: size=%d MB, load=%s\n",
+			snapshot.Name,
+			len(snapshot.Data)/(1024*1024),
+			time.Since(start),
+		)
 
 		tmp[snapshot.Name] = index
 	}

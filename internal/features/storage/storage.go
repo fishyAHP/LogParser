@@ -253,7 +253,9 @@ func (s *Storage) Write(data []byte) (domain.RecordID, error) {
 	return domain.RecordID(s.recordsCount), nil
 }
 
-func (s *Storage) ReadByID(id domain.RecordID) ([]byte, error) {
+func (s *Storage) ReadByID(
+	id domain.RecordID,
+) ([]byte, error) {
 	if 0 >= id ||
 		id > domain.RecordID(len(s.records)) {
 		return nil, ErrRecordNotFound
@@ -262,7 +264,9 @@ func (s *Storage) ReadByID(id domain.RecordID) ([]byte, error) {
 	return s.read(s.records[id-1])
 }
 
-func (s *Storage) read(pointer domain.RecordPointer) (data []byte, err error) {
+func (s *Storage) read(
+	pointer domain.RecordPointer,
+) (data []byte, err error) {
 	s.readMtx.Lock()
 	defer s.readMtx.Unlock()
 	if s.closed {
@@ -318,7 +322,9 @@ func (s *Storage) Close() error {
 	return nil
 }
 
-func (s *Storage) openPointer(pointer domain.RecordPointer) error {
+func (s *Storage) openPointer(
+	pointer domain.RecordPointer,
+) error {
 	if s.readSegment.IsOpen() {
 		if s.readSegment.ID == pointer.SegmentID {
 			return nil
@@ -378,4 +384,27 @@ func (s *Storage) Iterator() Iterator {
 	return &storageIterator{
 		dir: s.dir,
 	}
+}
+
+func (s *Storage) IteratorFromID(
+	id domain.RecordID,
+) (Iterator, error) {
+	if id == 0 {
+		id = 1
+	}
+
+	if uint64(id) > uint64(len(s.records)) {
+		return &storageIterator{
+			dir:  s.dir,
+			done: true,
+		}, nil
+	}
+
+	pointer := s.records[id-1]
+
+	return &storageIterator{
+		dir:       s.dir,
+		segmentID: pointer.SegmentID,
+		offset:    pointer.Offset - uint64(segments.RecordHeaderSize),
+	}, nil
 }

@@ -177,7 +177,14 @@ func (s *Service) rebuildMetadata() error {
 
 	fmt.Printf("Loaded checkpoint: %d\n", lastIndexedID)
 
-	iter := s.storage.Iterator()
+	iter, err := s.storage.IteratorFromID(lastIndexedID)
+	if err != nil {
+		return fmt.Errorf(
+			"create iterator from id: %w",
+			err,
+		)
+	}
+
 	var reindexed int
 	for iter.Next() {
 		if iter.RecordID() <= lastIndexedID {

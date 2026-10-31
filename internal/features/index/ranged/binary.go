@@ -1,12 +1,9 @@
 package ranged
 
 import (
-	"errors"
 	"fmt"
 
-	"fishyAHP/LogParser.git/internal/core/domain"
 	indexbin "fishyAHP/LogParser.git/internal/features/index/binary"
-	"fishyAHP/LogParser.git/internal/features/index/common"
 	"fishyAHP/LogParser.git/internal/features/index/structs"
 )
 
@@ -37,6 +34,8 @@ func (i *Index[K]) MarshalBinary() ([]byte, error) {
 func (i *Index[K]) UnmarshalBinary(data []byte) error {
 	tmp := New(i.tree.compare)
 
+	entries := make([]sortedEntry[K], 0)
+
 	_, err := indexbin.UnmarshalIndex(
 		data,
 		indexbin.DecodeKey[K],
@@ -44,37 +43,26 @@ func (i *Index[K]) UnmarshalBinary(data []byte) error {
 			key K,
 			posting *structs.PostingList,
 		) error {
-			if _, err := tmp.Exact(
-				domain.Value(key),
-			); err == nil {
-				return fmt.Errorf(
-					"duplicate key: %v",
-					key,
-				)
+			entries = append(entries, sortedEntry[K]{
+				key:     key,
+				posting: posting,
+			})
 
-			} else if !errors.Is(err, common.ErrRecordNotFound) {
-				return fmt.Errorf(
-					"check duplicate key: %w",
-					err,
-				)
-			}
-
-			if err := tmp.tree.insertPosting(
-				key,
-				posting,
-			); err != nil {
-				return fmt.Errorf(
-					"insert posting into index: %w",
-					err,
-				)
-			}
 			return nil
 		},
 	)
-
 	if err != nil {
 		return fmt.Errorf(
 			"range index unmarshal: %w",
+			err,
+		)
+	}
+
+	if err = tmp.tree.buildFromSorted(
+		entries,
+	); err != nil {
+		return fmt.Errorf(
+			"build tree from snapshot: %w",
 			err,
 		)
 	}
