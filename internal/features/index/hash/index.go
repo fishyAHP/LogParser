@@ -11,7 +11,7 @@ import (
 )
 
 type Index[K common.Key] struct {
-	count int
+	count uint64
 	idx   map[K]*structs.PostingList
 	mtx   sync.RWMutex
 }
@@ -91,7 +91,7 @@ func (i *Index[K]) Len() int {
 	i.mtx.RLock()
 	defer i.mtx.RUnlock()
 
-	return i.count
+	return int(i.count)
 }
 
 func (i *Index[K]) Clear() {

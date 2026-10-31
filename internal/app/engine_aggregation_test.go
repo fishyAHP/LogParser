@@ -13,6 +13,7 @@ func newAggregationService(t *testing.T) *Service {
 	t.Helper()
 
 	scheme := &domain.Scheme{
+		Separator: ',',
 		Parameters: []domain.Field{
 			{
 				Name:      "pid",

@@ -1,6 +1,7 @@
 package ranged
 
 import (
+	"fmt"
 	"iter"
 	"math"
 
@@ -19,8 +20,8 @@ type rbTree[K common.Key] struct {
 	// it needs to find place for insert in rb-tree
 	compare func(K, K) int
 
-	elemsCount int
-	nodesCount int
+	elemsCount uint64
+	nodesCount uint32
 }
 
 func newRBTree[K common.Key](comparator func(K, K) int) *rbTree[K] {
@@ -79,7 +80,7 @@ func (t *rbTree[K]) insert(
 			}
 		default:
 			if ok := current.add(value); !ok {
-				return common.ErrKeyExist
+				return common.ErrRecordExist
 			}
 			return
 		}
@@ -249,7 +250,8 @@ func (t *rbTree[K]) rangeSearch(
 				return true
 			}
 
-			if from == nil || t.compare(nod1.key, from.value) > 0 {
+			if from == nil ||
+				t.compare(nod1.key, from.value) > 0 {
 				if !walk(nod1.left) {
 					return false
 				}
@@ -261,7 +263,8 @@ func (t *rbTree[K]) rangeSearch(
 				}
 			}
 
-			if to == nil || t.compare(n.key, to.value) < 0 {
+			if to == nil ||
+				t.compare(nod1.key, to.value) < 0 {
 				if !walk(nod1.right) {
 					return false
 				}
@@ -301,7 +304,7 @@ func (t *rbTree[K]) inBoundPeriod(n *node[K], left, right *localBound[K]) bool {
 }
 
 func (t *rbTree[K]) len() int {
-	return t.elemsCount
+	return int(t.elemsCount)
 }
 
 func (t *rbTree[K]) height() int {
@@ -340,6 +343,7 @@ func (t *rbTree[K]) clear() {
 	t.nodesCount = 0
 }
 
+// TODO need to complete remove when will start delete from storage
 func (t *rbTree[K]) remove(key K, value domain.RecordID) bool {
 	return false
 }
@@ -355,79 +359,223 @@ func (t *rbTree[K]) extremum(
 	posting *structs.PostingList,
 	direction direction,
 ) (domain.Value, error) {
-	stack := make([]*node[K], 0, t.height())
-	current := t.root
 
-	for current != nil ||
-		len(stack) != 0 {
-
-		for current != nil {
-			stack = append(stack, current)
-
-			switch direction {
-			case ascending:
-				current = current.left
-			case descending:
-				current = current.right
-			}
-		}
-
-		current = stack[len(stack)-1]
-		stack = stack[:len(stack)-1]
-
+	for nod := range t.traverse(direction) {
 		if structs.IsListIntersects(
-			current.records.toPosting(),
+			nod.records.toPosting(),
 			posting,
 		) {
-			return current.key, nil
-		}
-
-		switch direction {
-		case ascending:
-			current = current.right
-		case descending:
-			current = current.left
+			return nod.key, nil
 		}
 	}
 
 	return nil, common.ErrRecordNotFound
 }
 
+func (t *rbTree[K]) traverse(
+	direction direction,
+) iter.Seq[*node[K]] {
+	return func(yield func(*node[K]) bool) {
+		stack := make([]*node[K], 0, t.height())
+		current := t.root
+
+		for current != nil ||
+			len(stack) != 0 {
+
+			for current != nil {
+				stack = append(stack, current)
+
+				switch direction {
+				case ascending:
+					current = current.left
+				case descending:
+					current = current.right
+				}
+			}
+
+			current = stack[len(stack)-1]
+			stack = stack[:len(stack)-1]
+
+			if !yield(current) {
+				return
+			}
+
+			switch direction {
+			case ascending:
+				current = current.right
+			case descending:
+				current = current.left
+			}
+		}
+	}
+}
+
 func (t *rbTree[K]) forEach(
 	posting *structs.PostingList,
-	visit func(
-		value domain.Value,
-		count int,
-	) bool) {
-	if t.root == nil {
-		return
-	}
-
-	queue := append(
-		make([]*node[K], 0, t.height()),
-		t.root,
-	)
-
-	for len(queue) > 0 {
-		front := queue[0]
-		queue = queue[1:]
-
+	visit func(domain.Value, int) bool,
+) {
+	for n := range t.traverse(ascending) {
 		matches := structs.CountListIntersections(
-			front.records.toPosting(),
+			n.records.toPosting(),
 			posting,
 		)
 
 		if matches > 0 {
-			if !visit(front.key, matches) {
+			if !visit(n.key, matches) {
 				return
 			}
 		}
+	}
+}
 
-		if front.left != nil {
-			queue = append(queue, front.left)
-		}
-		if front.right != nil {
-			queue = append(queue, front.right)
+func (t *rbTree[K]) insertPosting(
+	key K,
+	posting *structs.PostingList,
+) error {
+	if posting == nil || posting.Len() == 0 {
+		return fmt.Errorf("empty posting list")
+	}
+
+	if t.root == nil {
+		t.root = newNodeWithPosting(key, posting)
+		t.root.color = Black
+
+		t.nodesCount = 1
+		t.elemsCount = uint64(posting.Len())
+		return nil
+	}
+
+	current := t.root
+
+	for {
+		cmp := t.compare(key, current.key)
+
+		switch cmp {
+		case -1:
+			if current.left != nil {
+				current = current.left
+				continue
+			}
+
+			nod := newNodeWithPosting(key, posting)
+			nod.parent = current
+			current.left = nod
+
+			t.nodesCount++
+			t.elemsCount += uint64(posting.Len())
+			t.fixInsert(nod)
+
+			return nil
+
+		case 1:
+			if current.right != nil {
+				current = current.right
+				continue
+			}
+
+			nod := newNodeWithPosting(key, posting)
+			nod.parent = current
+			current.right = nod
+
+			t.nodesCount++
+			t.elemsCount += uint64(posting.Len())
+			t.fixInsert(nod)
+
+			return nil
+
+		default:
+			return fmt.Errorf("duplicate key: %v", key)
 		}
 	}
+}
+
+type sortedEntry[K common.Key] struct {
+	key     K
+	posting *structs.PostingList
+}
+
+type nextEntry[K common.Key] func() (
+	K,
+	*structs.PostingList,
+	error,
+)
+
+func (t *rbTree[K]) buildFromSorted(
+	count int,
+	next nextEntry[K],
+) error {
+	redLevel := computeRedLevel(count)
+
+	var build func(
+		n, level int,
+		parent *node[K],
+	) (*node[K], error)
+
+	build = func(
+		n, level int,
+		parent *node[K],
+	) (*node[K], error) {
+		if n == 0 {
+			return nil, nil
+		}
+
+		leftCount := n / 2
+
+		// Сначала строим левое поддерево.
+		left, err := build(leftCount, level+1, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		// Получаем следующий ключ из потока.
+		key, posting, err := next()
+		if err != nil {
+			return nil, err
+		}
+
+		current := newNodeWithPosting(key, posting)
+		current.parent = parent
+		current.left = left
+
+		if left != nil {
+			left.parent = current
+		}
+
+		current.color = Black
+		if level == redLevel {
+			current.color = Red
+		}
+
+		// Затем строим правое поддерево.
+		right, err := build(
+			n-leftCount-1,
+			level+1,
+			current,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		current.right = right
+
+		return current, nil
+	}
+
+	root, err := build(count, 0, nil)
+	if err != nil {
+		return err
+	}
+
+	t.root = root
+	return nil
+}
+
+func computeRedLevel(size int) int {
+	level := 0
+
+	for m := size - 1; m >= 0; m = m/2 - 1 {
+		level++
+	}
+
+	return level
 }

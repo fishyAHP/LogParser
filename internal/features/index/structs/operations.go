@@ -1,73 +1,8 @@
 package structs
 
 import (
-	"slices"
-
 	"fishyAHP/LogParser.git/internal/core/domain"
 )
-
-func IntersectionSets[K comparable](
-	s1, s2 *Set[K],
-) *Set[K] {
-	smaller := minSet[K](s1, s2)
-	other := otherSet[K](smaller, s1, s2)
-	res := NewSet[K](smaller.Len())
-
-	for k := range smaller.set {
-		if other.Contains(k) {
-			res.Add(k)
-		}
-	}
-
-	return res
-}
-
-func UnionSets[K comparable](
-	s1, s2 *Set[K],
-) *Set[K] {
-	s := NewSet[K](s1.Len() + s2.Len())
-	for k := range s1.set {
-		s.Add(k)
-	}
-
-	for k := range s2.set {
-		s.Add(k)
-	}
-
-	return s
-}
-
-func DifferenceSets[K comparable](
-	s1, s2 *Set[K],
-) *Set[K] {
-	s := NewSet[K](s1.Len())
-
-	for k := range s1.set {
-		if !s2.Contains(k) {
-			s.Add(k)
-		}
-	}
-
-	return s
-}
-
-func minSet[K comparable](
-	s1, s2 *Set[K],
-) *Set[K] {
-	if s1.Len() <= s2.Len() {
-		return s1
-	}
-	return s2
-}
-
-func otherSet[K comparable](
-	cur, s1, s2 *Set[K],
-) *Set[K] {
-	if cur == s1 {
-		return s2
-	}
-	return s1
-}
 
 func forEachIntersectLists(
 	s1, s2 *PostingList,
@@ -78,12 +13,12 @@ func forEachIntersectLists(
 
 	for i < s1.Len() && j < s2.Len() {
 		switch {
-		case s1.posting[i] < s2.posting[j]:
+		case (*s1)[i] < (*s2)[j]:
 			i++
-		case s1.posting[i] > s2.posting[j]:
+		case (*s1)[i] > (*s2)[j]:
 			j++
 		default:
-			if !visit(s1.posting[i]) {
+			if !visit((*s1)[i]) {
 				return
 			}
 			i++
@@ -138,25 +73,25 @@ func UnionLists(s1, s2 *PostingList) *PostingList {
 
 	for i < s1.Len() && j < s2.Len() {
 		switch {
-		case s1.posting[i] < s2.posting[j]:
-			res.Add(s1.posting[i])
+		case (*s1)[i] < (*s2)[j]:
+			res.Add((*s1)[i])
 			i++
-		case s1.posting[i] > s2.posting[j]:
-			res.Add(s2.posting[j])
+		case (*s1)[i] > (*s2)[j]:
+			res.Add((*s2)[j])
 			j++
 		default:
-			res.Add(s1.posting[i])
+			res.Add((*s1)[i])
 			i++
 			j++
 		}
 	}
 
 	for ; i < s1.Len(); i++ {
-		res.Add(s1.posting[i])
+		res.Add((*s1)[i])
 	}
 
 	for ; j < s2.Len(); j++ {
-		res.Add(s2.posting[j])
+		res.Add((*s2)[j])
 	}
 
 	return res
@@ -169,10 +104,10 @@ func DifferenceLists(s1, s2 *PostingList) *PostingList {
 
 	for i < s1.Len() && j < s2.Len() {
 		switch {
-		case s1.posting[i] < s2.posting[j]:
-			res.Add(s1.posting[i])
+		case (*s1)[i] < (*s2)[j]:
+			res.Add((*s1)[i])
 			i++
-		case s1.posting[i] > s2.posting[j]:
+		case (*s1)[i] > (*s2)[j]:
 			j++
 		default:
 			i++
@@ -182,20 +117,8 @@ func DifferenceLists(s1, s2 *PostingList) *PostingList {
 	}
 
 	for ; i < s1.Len(); i++ {
-		res.Add(s1.posting[i])
+		res.Add((*s1)[i])
 	}
 
 	return res
-}
-
-func SetToPosting(set *Set[domain.RecordID]) *PostingList {
-	arr := make([]domain.RecordID, 0, set.Len())
-	for k := range set.set {
-		arr = append(arr, k)
-	}
-	slices.Sort(arr)
-
-	posting := NewPostingFromSorted(arr)
-
-	return posting
 }

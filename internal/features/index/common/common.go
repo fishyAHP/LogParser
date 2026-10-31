@@ -11,7 +11,7 @@ var (
 	ErrInvalidType     = errors.New("invalid value type")
 	ErrRecordNotFound  = errors.New("record not found")
 	ErrUnsupportedType = errors.New("unsupported type")
-	ErrKeyExist        = errors.New("key already exists")
+	ErrRecordExist     = errors.New("record id already exists")
 )
 
 type Key interface {

@@ -1,15 +1,19 @@
 package main
 
 import (
+	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net"
 	"os"
+	"os/signal"
 	"runtime"
 	"runtime/pprof"
 	"strings"
+	"syscall"
 
 	"fishyAHP/LogParser.git/internal/app"
 	"fishyAHP/LogParser.git/internal/core/domain"
@@ -27,7 +31,14 @@ func main() {
 		}
 	}()
 
-	if err := c.Run(); err != nil {
+	ctx, cancel := signal.NotifyContext(
+		context.Background(),
+		syscall.SIGINT,
+		syscall.SIGTERM,
+	)
+	defer cancel()
+
+	if err := c.Run(ctx); err != nil {
 		log.Fatal(err)
 	}
 
@@ -54,6 +65,8 @@ type Cli struct {
 	in     io.Reader
 	out    io.Writer
 	errOut io.Writer
+
+	logs <-chan string
 }
 
 var ErrUnknownCommand = errors.New("unknown command")
@@ -81,10 +94,15 @@ func New(
 				FieldType: domain.StringType,
 				IndexType: domain.TextIndex,
 			},
+			{
+				Name:      "timestamp",
+				FieldType: domain.TimeType,
+				IndexType: domain.RangeIndex,
+			},
 		},
 	},
 		domain.JSON,
-		".storage/logs",
+		".storage",
 	)
 
 	if err != nil {
@@ -99,30 +117,55 @@ func New(
 	}, nil
 }
 
-func (c *Cli) Run() error {
+func (c *Cli) Run(
+	ctx context.Context,
+) error {
+	inputCh := make(chan inputResult)
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	go c.readInput(ctx, inputCh)
+
 	for {
 		fmt.Fprint(c.out, "Enter a command: ")
-		data := make([]byte, 1024)
-		n, err := c.in.Read(data)
 
-		if err != nil {
-			return err
-		}
-		line := strings.TrimSpace(string(data[:n]))
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
 
-		exit, err := c.execute(line)
-		if err != nil {
-			if errors.Is(err, ErrUnknownCommand) {
-				fmt.Fprint(c.errOut, err.Error()+"\n")
+		case result, ok := <-inputCh:
+			if !ok {
+				return nil
+			}
+
+			if result.err != nil {
+				return result.err
+			}
+
+			exit, err := c.execute(result.line)
+			if err != nil {
+				if errors.Is(err, ErrUnknownCommand) {
+					fmt.Fprintln(c.errOut, err)
+					continue
+				}
+
+				return err
+			}
+
+			if exit {
+				return nil
+			}
+
+		case message, ok := <-c.logs:
+			if !ok {
+				c.logs = nil
 				continue
 			}
-			return err
-		}
-		if exit {
-			break
+
+			fmt.Fprintln(c.out, message)
 		}
 	}
-	return nil
 }
 
 func (c *Cli) execute(line string) (bool, error) {
@@ -257,4 +300,42 @@ func (c *Cli) query(query string) error {
 		fmt.Fprintln(c.out, string(data))
 	}
 	return nil
+}
+
+type inputResult struct {
+	line string
+	err  error
+}
+
+func (c *Cli) readInput(
+	ctx context.Context,
+	ch chan<- inputResult,
+) {
+	defer close(ch)
+
+	scanner := bufio.NewScanner(c.in)
+
+	for scanner.Scan() {
+		select {
+		case <-ctx.Done():
+			return
+		case ch <- inputResult{
+			line: strings.TrimSpace(
+				scanner.Text(),
+			),
+		}:
+
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		select {
+		case <-ctx.Done():
+			return
+		case ch <- inputResult{
+			err: scanner.Err(),
+		}:
+
+		}
+	}
 }

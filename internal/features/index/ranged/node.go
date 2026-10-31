@@ -32,6 +32,25 @@ func newNode[K comparable](key K, value domain.RecordID) *node[K] {
 	}
 }
 
+func newNodeWithPosting[K comparable](
+	key K,
+	posting *structs.PostingList,
+) *node[K] {
+	rec := &records{}
+
+	if posting.Len() == 1 {
+		rec.single = posting.At(0)
+	} else {
+		rec.many = posting
+	}
+
+	return &node[K]{
+		key:     key,
+		records: rec,
+		color:   Red,
+	}
+}
+
 func (n *node[K]) add(value domain.RecordID) bool {
 	return n.records.add(value)
 }

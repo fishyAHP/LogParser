@@ -1,13 +1,17 @@
 package index
 
 import (
+	"encoding"
 	"fmt"
 	"iter"
+	"slices"
+	"time"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
 	"fishyAHP/LogParser.git/internal/core/errors"
 	"fishyAHP/LogParser.git/internal/features/aggregation/interfaces"
 	"fishyAHP/LogParser.git/internal/features/index/common"
+	"fishyAHP/LogParser.git/internal/features/storage/segments"
 )
 
 type Manager struct {
@@ -178,4 +182,145 @@ func (m *Manager) Aggregator(
 	}
 
 	return aggregator, nil
+}
+
+type Snapshot struct {
+	Name string
+	Data []byte
+}
+
+func (m *Manager) MakeSnapshots() iter.Seq2[Snapshot, error] {
+	return func(yield func(Snapshot, error) bool) {
+		for name, index := range m.indexes {
+			marshaler, ok := index.(encoding.BinaryMarshaler)
+			if !ok {
+				yield(Snapshot{}, fmt.Errorf(
+					"index %q doesnt implement %T",
+					name,
+					encoding.BinaryMarshaler(nil),
+				))
+				return
+			}
+			data, err := marshaler.MarshalBinary()
+			if err != nil {
+				yield(
+					Snapshot{},
+					fmt.Errorf(
+						"marshal index %q: %w",
+						name,
+						err,
+					),
+				)
+
+				return
+			}
+
+			if !yield(Snapshot{
+				Name: name,
+				Data: data,
+			}, nil) {
+				return
+			}
+		}
+	}
+}
+
+func (m *Manager) FromSnapshots(
+	snapshots iter.Seq2[Snapshot, error],
+) error {
+	tmp := make(map[string]common.Index)
+
+	for snapshot, err := range snapshots {
+		if err != nil {
+			return fmt.Errorf(
+				"failed to get snapshot: %w",
+				err,
+			)
+		}
+
+		if _, ok := tmp[snapshot.Name]; ok {
+			return fmt.Errorf(
+				"index %q already exist",
+				snapshot.Name,
+			)
+		}
+
+		idx := slices.IndexFunc(
+			m.scheme.Parameters,
+			func(field domain.Field) bool {
+				return field.Name == snapshot.Name
+			},
+		)
+
+		if idx == -1 {
+			return fmt.Errorf(
+				"index %q dont exist in schema",
+				snapshot.Name,
+			)
+		}
+
+		field := m.scheme.Parameters[idx]
+		if field.IndexType == domain.NoIndex {
+			return fmt.Errorf(
+				"field %q is not indexed",
+				snapshot.Name,
+			)
+		}
+
+		index, err := newFieldIndex(field)
+		if err != nil {
+			return fmt.Errorf(
+				"create index %q: %w",
+				snapshot.Name,
+				err,
+			)
+		}
+
+		unmarshaler, ok := index.(encoding.BinaryUnmarshaler)
+		if !ok {
+			return fmt.Errorf(
+				"index %q doesnt implement %T",
+				snapshot.Name,
+				encoding.BinaryUnmarshaler(nil),
+			)
+		}
+
+		start := time.Now()
+
+		if err = unmarshaler.UnmarshalBinary(
+			snapshot.Data,
+		); err != nil {
+			return fmt.Errorf(
+				"rebuilding index %q from snapshot: %w",
+				snapshot.Name,
+				err,
+			)
+		}
+
+		fmt.Printf(
+			"Index %s: size=%s, load=%s\n",
+			snapshot.Name,
+			segments.FileSize(len(snapshot.Data)),
+			time.Since(start),
+		)
+
+		tmp[snapshot.Name] = index
+	}
+
+	for _, field := range m.scheme.Parameters {
+		if field.IndexType == domain.NoIndex {
+			continue
+		}
+
+		if _, ok := tmp[field.Name]; !ok {
+			return fmt.Errorf(
+				"missing snapshot for index %q",
+				field.Name,
+			)
+		}
+	}
+
+	m.indexes = tmp
+
+	return nil
 }

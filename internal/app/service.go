@@ -6,40 +6,41 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
+	"time"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
 	"fishyAHP/LogParser.git/internal/features/index"
+	"fishyAHP/LogParser.git/internal/features/metadata"
 	"fishyAHP/LogParser.git/internal/features/parse"
 	"fishyAHP/LogParser.git/internal/features/query"
 	"fishyAHP/LogParser.git/internal/features/query/iterators"
+	"fishyAHP/LogParser.git/internal/features/snapshot"
 	"fishyAHP/LogParser.git/internal/features/storage"
+	"fishyAHP/LogParser.git/internal/features/storage/segments"
 )
 
 type Service struct {
-	index  *index.Manager
-	engine *query.Engine
-	parser *parse.LogParser
-	store  *storage.Storage
+	index   *index.Manager
+	engine  *query.Engine
+	parser  *parse.LogParser
+	storage *storage.Storage
+	catalog *metadata.FieldsCatalog
 
-	catalog *domain.FieldsCatalog
-}
+	metadata *Metadata
 
-type IndexManager interface {
-	Index(
-		record domain.RecordID,
-		entry domain.LogEntry,
-	) error
+	lastIndexedID domain.RecordID
 }
 
 func NewService(
 	scheme *domain.Scheme,
 	format domain.Format,
-	storagePath string,
+	path string,
 ) (*Service, error) {
 	service, err := newService(
 		scheme,
 		format,
-		storagePath,
+		path,
 	)
 	if err != nil {
 		return nil, err
@@ -53,14 +54,39 @@ var ErrIndexRebuild = errors.New("rebuild indexes")
 func newService(
 	scheme *domain.Scheme,
 	format domain.Format,
-	storagePath string,
+	path string,
 ) (*Service, error) {
-	catalog := domain.NewCatalog()
+	if err := scheme.Validate(); err != nil {
+		return nil, fmt.Errorf(
+			"invalid scheme: %w",
+			err,
+		)
+	}
 
-	store, err := storage.New(storagePath)
+	catalog := metadata.NewCatalog()
+
+	start := time.Now()
+	store, err := storage.New(
+		filepath.Join(
+			path,
+			"logs",
+		))
+	fmt.Println("Storage recovery:", time.Since(start))
 	if err != nil {
 		return nil, fmt.Errorf(
 			"new storage: %w",
+			err,
+		)
+	}
+
+	snapshotStore, err := snapshot.NewStore(
+		filepath.Join(
+			path,
+			"snapshots",
+		))
+	if err != nil {
+		return nil, fmt.Errorf(
+			"new snapshot store: %w",
 			err,
 		)
 	}
@@ -73,6 +99,12 @@ func newService(
 			err,
 		)
 	}
+
+	meta := NewMetadata(
+		catalog,
+		snapshotStore,
+		idx,
+	)
 
 	parser := parse.NewParser(scheme, format)
 
@@ -91,11 +123,12 @@ func newService(
 	}
 
 	service := &Service{
-		parser:  parser,
-		store:   store,
-		index:   idx,
-		engine:  engine,
-		catalog: catalog,
+		parser:   parser,
+		storage:  store,
+		index:    idx,
+		engine:   engine,
+		catalog:  catalog,
+		metadata: meta,
 	}
 
 	if err = service.rebuildMetadata(); err != nil {
@@ -125,7 +158,40 @@ func (s *Service) RebuildIndexes() error {
 }
 
 func (s *Service) rebuildMetadata() error {
-	iter := s.store.Iterator()
+	start := time.Now()
+
+	if err := s.metadata.Load(); err != nil {
+		if !errors.Is(err, snapshot.ErrNoSnapshots) &&
+			!errors.Is(err, snapshot.ErrNoValidSnapshots){
+			return fmt.Errorf(
+				"load indexes: %w",
+				err,
+			)
+		}
+
+		fmt.Println("No valid snapshots, rebuilding metadata from storage")
+
+		s.index.Clear()
+		s.catalog.Clear()
+	}
+
+	fmt.Println("Snapshot load:", time.Since(start))
+	start = time.Now()
+
+	lastIndexedID := s.metadata.Checkpoint()
+	s.lastIndexedID = lastIndexedID
+
+	fmt.Printf("Loaded checkpoint: %d\n", lastIndexedID)
+
+	iter, err := s.storage.IteratorFromID(lastIndexedID+1)
+	if err != nil {
+		return fmt.Errorf(
+			"create iterator from id: %w",
+			err,
+		)
+	}
+
+	var reindexed int
 	for iter.Next() {
 		data := iter.Data()
 
@@ -147,11 +213,19 @@ func (s *Service) rebuildMetadata() error {
 			)
 		}
 
+		reindexed++
 		s.catalog.Add(parsed.Fields...)
+		s.lastIndexedID = iter.RecordID()
 	}
 
+	fmt.Printf("indexed after snapshot: %d\n", reindexed)
+	fmt.Println("Metadata recovery:", time.Since(start))
+
 	if err := iter.Err(); err != nil {
-		return fmt.Errorf("iterator err: %w", err)
+		return fmt.Errorf(
+			"iterator err: %w",
+			err,
+		)
 	}
 
 	return nil
@@ -167,7 +241,7 @@ func (s *Service) Ingest(raw []byte) error {
 	}
 
 	// TODO: storage write may succeed, but index failed, need rollback/WAL
-	record, err := s.store.Write(raw)
+	record, err := s.storage.Write(raw)
 	if err != nil {
 		return fmt.Errorf(
 			"storage write: %w",
@@ -184,14 +258,15 @@ func (s *Service) Ingest(raw []byte) error {
 
 	s.catalog.Add(parsed.Fields...)
 
+	s.lastIndexedID = record
 	return nil
 }
 
 func (s *Service) IngestReader(reader io.Reader) error {
 	scanner := bufio.NewScanner(reader)
 	scanner.Buffer(
-		make([]byte, 4*storage.KByte),
-		int(storage.MByte),
+		make([]byte, 4*segments.KByte),
+		int(segments.MByte),
 	)
 
 	for scanner.Scan() {
@@ -231,10 +306,29 @@ func (s *Service) Query(q string) (iterators.Rows, error) {
 }
 
 func (s *Service) Close() error {
-	err := s.store.Close()
-	if err != nil {
+	if err := s.Save(); err != nil {
+		return fmt.Errorf(
+			"service save: %w",
+			err,
+		)
+	}
+
+	if err := s.storage.Close(); err != nil {
 		return fmt.Errorf(
 			"storage close: %w",
+			err,
+		)
+	}
+
+	return nil
+}
+
+func (s *Service) Save() error {
+	if err := s.metadata.Save(
+		s.lastIndexedID,
+	); err != nil {
+		return fmt.Errorf(
+			"saving snapshot: %w",
 			err,
 		)
 	}

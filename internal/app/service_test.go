@@ -68,6 +68,7 @@ func TestService_RebuildIndexesAfterRestart(t *testing.T) {
 	dir := t.TempDir()
 
 	scheme := &domain.Scheme{
+		Separator: ',',
 		Parameters: []domain.Field{
 			{
 				Name:      "timestamp",
@@ -152,7 +153,7 @@ func TestService_RebuildIndexesAfterRestart(t *testing.T) {
 		t.Fatalf("query after restart: %v", err)
 	}
 	var countAfter int
-	for range after{
+	for range after {
 		countAfter++
 	}
 
@@ -192,11 +193,9 @@ func TestService_RebuildIndexesAfterRestart(t *testing.T) {
 		t.Fatalf("range query after new ingest: %v", err)
 	}
 	count = 0
-	for range result{
+	for range result {
 		count++
 	}
-
-
 
 	if count != 3 {
 		t.Fatalf(

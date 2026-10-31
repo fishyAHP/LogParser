@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"fishyAHP/LogParser.git/internal/core/domain"
+	"fishyAHP/LogParser.git/internal/features/metadata"
 )
 
 func TestSemanticAnalyzer_InvalidAggregateCombinations(t *testing.T) {
@@ -18,7 +19,7 @@ func TestSemanticAnalyzer_InvalidAggregateCombinations(t *testing.T) {
 	}
 
 	analyzer := newSemanticAnalyzer(scheme)
-	catalog := domain.NewCatalog()
+	catalog := metadata.NewCatalog()
 
 	tests := []struct {
 		name       string
