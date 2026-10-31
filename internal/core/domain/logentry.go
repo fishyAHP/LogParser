@@ -1,6 +1,9 @@
 package domain
 
-import "time"
+import (
+	"encoding/json/v2"
+	"time"
+)
 
 // ParsedLog all fields with LogEntry
 type ParsedLog struct {
@@ -37,4 +40,8 @@ func (BoolValue) Type() DataType {
 }
 func (TimeValue) Type() DataType {
 	return TimeType
+}
+
+func (t TimeValue) MarshalJSON() ([]byte, error) {
+	return json.Marshal(time.Time(t).Format(time.RFC3339Nano))
 }
