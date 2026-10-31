@@ -494,86 +494,79 @@ type sortedEntry[K common.Key] struct {
 	posting *structs.PostingList
 }
 
+type nextEntry[K common.Key] func() (
+	K,
+	*structs.PostingList,
+	error,
+)
+
 func (t *rbTree[K]) buildFromSorted(
-	entries []sortedEntry[K],
+	count int,
+	next nextEntry[K],
 ) error {
-	var count uint64
-
-	for idx, entry := range entries {
-		if entry.posting == nil ||
-			entry.posting.Len() == 0 {
-			return fmt.Errorf(
-				"empty posting at index %d",
-				idx,
-			)
-		}
-
-		if idx > 0 && t.compare(
-			entries[idx-1].key,
-			entry.key,
-		) >= 0 {
-			return fmt.Errorf(
-				"unordered or duplicate key at index %d",
-				idx,
-			)
-		}
-
-		count += uint64(entry.posting.Len())
-	}
-
-	redLevel := computeRedLevel(len(entries))
+	redLevel := computeRedLevel(count)
 
 	var build func(
-		lo, hi, level int,
+		n, level int,
 		parent *node[K],
-	) *node[K]
+	) (*node[K], error)
 
 	build = func(
-		start, end, level int,
+		n, level int,
 		parent *node[K],
-	) *node[K] {
-		if start > end {
-			return nil
+	) (*node[K], error) {
+		if n == 0 {
+			return nil, nil
 		}
 
-		mid := start + (end-start)/2
-		entry := entries[mid]
+		leftCount := n / 2
 
-		current := newNodeWithPosting(
-			entry.key,
-			entry.posting,
-		)
+		// Сначала строим левое поддерево.
+		left, err := build(leftCount, level+1, nil)
+		if err != nil {
+			return nil, err
+		}
 
+		// Получаем следующий ключ из потока.
+		key, posting, err := next()
+		if err != nil {
+			return nil, err
+		}
+
+		current := newNodeWithPosting(key, posting)
 		current.parent = parent
-		current.color = Black
+		current.left = left
 
+		if left != nil {
+			left.parent = current
+		}
+
+		current.color = Black
 		if level == redLevel {
 			current.color = Red
 		}
 
-		current.left = build(
-			start,
-			mid-1,
+		// Затем строим правое поддерево.
+		right, err := build(
+			n-leftCount-1,
 			level+1,
 			current,
 		)
+		if err != nil {
+			return nil, err
+		}
 
-		current.right = build(
-			mid+1,
-			end,
-			level+1,
-			current,
-		)
+		current.right = right
 
-		return current
+		return current, nil
 	}
 
-	root := build(0, len(entries)-1, 0, nil)
+	root, err := build(count, 0, nil)
+	if err != nil {
+		return err
+	}
 
 	t.root = root
-	t.nodesCount = uint32(len(entries))
-	t.elemsCount = count
-
 	return nil
 }
 

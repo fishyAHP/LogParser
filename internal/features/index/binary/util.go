@@ -234,3 +234,99 @@ func UnmarshalIndex[K comparable](
 
 	return header, nil
 }
+
+func IterateIndex[K comparable](
+	data []byte,
+	decodeKey func([]byte) (K, error),
+) iter.Seq2[Entry[K], error] {
+	return func(yield func(Entry[K], error) bool) {
+		var header Header
+
+		if err := header.UnmarshalBinary(data); err != nil {
+			yield(Entry[K]{}, fmt.Errorf(
+				"unmarshal header: %w", err,
+			))
+			return
+		}
+
+		offset := HeaderSize
+		var actualRecords uint64
+
+		for entryIndex := range header.EntriesCount {
+			var entry BinaryEntry
+
+			if err := entry.UnmarshalBinary(data[offset:]); err != nil {
+				yield(Entry[K]{}, fmt.Errorf(
+					"unmarshal entry %d: %w",
+					entryIndex, err,
+				))
+				return
+			}
+
+			key, err := decodeKey(entry.Key)
+			if err != nil {
+				yield(Entry[K]{}, fmt.Errorf(
+					"decode key: %w", err,
+				))
+				return
+			}
+
+			if entry.RecordsCount == 0 ||
+				entry.RecordsCount > uint64(len(entry.Records))/8 ||
+				actualRecords > header.RecordsCount ||
+				entry.RecordsCount > header.RecordsCount-actualRecords {
+				yield(Entry[K]{}, fmt.Errorf(
+					"invalid posting count in entry %d",
+					entryIndex,
+				))
+				return
+			}
+
+			posting := structs.NewPostingLists(int(entry.RecordsCount))
+
+			if err := posting.UnmarshalBinary(entry.Records); err != nil {
+				yield(Entry[K]{}, err)
+				return
+			}
+
+			if uint64(posting.Len()) != entry.RecordsCount {
+				yield(Entry[K]{}, fmt.Errorf(
+					"posting length mismatch",
+				))
+				return
+			}
+
+			offset += KeyLengthSize +
+				len(entry.Key) +
+				RecordsCountSize +
+				len(entry.Records)
+
+			actualRecords += entry.RecordsCount
+
+			if !yield(Entry[K]{
+				Key:     key,
+				Posting: posting,
+			}, nil) {
+				return
+			}
+		}
+
+		if offset != len(data) {
+			yield(Entry[K]{}, fmt.Errorf(
+				"unexpected trailing data",
+			))
+			return
+		}
+
+		if actualRecords != header.RecordsCount {
+			yield(Entry[K]{}, fmt.Errorf(
+				"records count mismatch",
+			))
+		}
+	}
+}
+
+type Entry[K comparable] struct {
+	Key     K
+	Posting *structs.PostingList
+}
