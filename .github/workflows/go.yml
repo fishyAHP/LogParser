@@ -16,7 +16,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: cmd/log_parser
+        working-directory: cmd/logparser
     
     steps:
     - uses: actions/checkout@v4

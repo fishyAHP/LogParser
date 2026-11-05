@@ -2,6 +2,7 @@ package indexbin
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math"
 	"time"
@@ -58,7 +59,7 @@ func DecodeKey[K common.Key](
 ) (K, error) {
 	var zero K
 
-	switch k := any(zero).(type) {
+	switch any(zero).(type) {
 	case domain.StringValue:
 		return any(domain.StringValue(data)).(K), nil
 
@@ -136,9 +137,6 @@ func DecodeKey[K common.Key](
 			)
 		}
 	default:
-		return zero, fmt.Errorf(
-			"unsupported key type: %T",
-			k,
-		)
+		return zero, errors.New("unsupported key type")
 	}
 }
