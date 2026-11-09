@@ -28,6 +28,9 @@ type CLI struct {
 	out    io.Writer
 	errOut io.Writer
 
+	mode  OutputMode
+	timer bool
+
 	closeOnce sync.Once
 	closeErr  error
 }
@@ -93,14 +96,15 @@ func New(
 	return &CLI{
 		service: service,
 		input:   input,
+		mode:    OutputTable,
 		out:     out,
 		errOut:  errOut,
 	}, nil
 }
 
 func (c *CLI) Run(ctx context.Context) error {
-	var pendingSQL strings.Builder
-	collectingSQL := false
+	var sqlBuffer strings.Builder
+	multiline := false
 
 	for {
 		if ctx.Err() != nil {
@@ -108,16 +112,16 @@ func (c *CLI) Run(ctx context.Context) error {
 		}
 
 		prompt := "logparser> "
-		if collectingSQL {
+		if multiline {
 			prompt = "       ... "
 		}
 
 		line, err := c.input.ReadLine(prompt)
 
 		if errors.Is(err, readline.ErrInterrupt) {
-			if collectingSQL {
-				pendingSQL.Reset()
-				collectingSQL = false
+			if multiline {
+				sqlBuffer.Reset()
+				multiline = false
 
 				fmt.Fprintln(c.out, "Query canceled")
 				continue
@@ -127,10 +131,9 @@ func (c *CLI) Run(ctx context.Context) error {
 		}
 
 		if errors.Is(err, io.EOF) {
-			if collectingSQL {
-				return errors.New(
-					"unexpected EOF: unfinished SQL query",
-				)
+			if multiline {
+				fmt.Fprintln(c.errOut,
+					"Query canceled: unexpected EOF")
 			}
 			return nil
 		}
@@ -142,17 +145,35 @@ func (c *CLI) Run(ctx context.Context) error {
 			return fmt.Errorf("read input: %w", err)
 		}
 
-		if collectingSQL {
-			pendingSQL.WriteByte('\n')
-			pendingSQL.WriteString(line)
+		if ctx.Err() != nil {
+			return nil
+		}
+
+		line = strings.TrimSpace(line)
+
+		if multiline {
+			continuation := strings.HasSuffix(line, "\\")
+
+			if continuation {
+				line = strings.TrimSpace(
+					strings.TrimSuffix(
+						line, "\\",
+					),
+				)
+			}
+
+			if sqlBuffer.Len() > 0 {
+				sqlBuffer.WriteByte('\n')
+			}
+			sqlBuffer.WriteString(line)
 
 			sql, complete, err := completeLSQL(
-				pendingSQL.String(),
+				sqlBuffer.String(),
 			)
 			if err != nil {
 				c.printCommandError(err)
-				pendingSQL.Reset()
-				collectingSQL = false
+				sqlBuffer.Reset()
+				multiline = false
 				continue
 			}
 
@@ -160,14 +181,13 @@ func (c *CLI) Run(ctx context.Context) error {
 				continue
 			}
 
-			pendingSQL.Reset()
-			collectingSQL = false
+			sqlBuffer.Reset()
+			multiline = false
 
 			c.printCommandError(c.query(sql))
 			continue
 		}
 
-		line = strings.TrimSpace(line)
 		if line == "" {
 			continue
 		}
@@ -176,29 +196,34 @@ func (c *CLI) Run(ctx context.Context) error {
 
 		if strings.EqualFold(command, "query") {
 			if argument == "" {
-				c.printCommandError(
-					errors.New("expected SQL query"),
-				)
+				multiline = true
+				sqlBuffer.Reset()
 				continue
 			}
 
-			pendingSQL.WriteString(argument)
+			if strings.HasSuffix(argument, "\\") {
+				sqlBuffer.Reset()
+				sqlBuffer.WriteString(
+					strings.TrimSpace(
+						strings.TrimSuffix(
+							argument, "\\",
+						),
+					),
+				)
+				multiline = true
+				continue
+			}
 
-			sql, complete, err := completeLSQL(
-				pendingSQL.String(),
-			)
+			sql, complete, err := completeLSQL(argument)
 			if err != nil {
 				c.printCommandError(err)
-				pendingSQL.Reset()
 				continue
 			}
 
 			if !complete {
-				collectingSQL = true
-				continue
+				sql = argument
 			}
 
-			pendingSQL.Reset()
 			c.printCommandError(c.query(sql))
 			continue
 		}

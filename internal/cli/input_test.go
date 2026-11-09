@@ -1,38 +1,68 @@
 package cli
 
 import (
-	"errors"
-	"io"
-	"strings"
 	"testing"
 )
 
-func TestBasicInput_ReadLine(t *testing.T) {
-	input := NewBasicInput(strings.NewReader(
-		"query Select Count(*)\n" +
-			"query SELECT timestamp\n" +
-			"exit\n",
-	))
-
-	expected := []string{
-		"query Select Count(*)",
-		"query SELECT timestamp",
-		"exit",
+func TestCompleteSQL(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+		complete bool
+	}{
+		{
+			name:     "single line with semicolon",
+			input:    "SELECT COUNT(*);",
+			expected: "SELECT COUNT(*)",
+			complete: true,
+		},
+		{
+			name:     "single line without semicolon",
+			input:    "SELECT COUNT(*)",
+			expected: "",
+			complete: false,
+		},
+		{
+			name: "multiline",
+			input: `SELECT timestamp, message
+WHERE level="ERROR"
+LIMIT 10;`,
+			expected: `SELECT timestamp, message
+WHERE level="ERROR"
+LIMIT 10`,
+			complete: true,
+		},
+		{
+			name:     "semicolon inside quotes",
+			input:    `SELECT message WHERE message="a;b";`,
+			expected: `SELECT message WHERE message="a;b"`,
+			complete: true,
+		},
 	}
 
-	for _, want := range expected {
-		got, err := input.ReadLine()
-		if err != nil {
-			t.Fatalf("ReadLine: %v", err)
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, complete, err := completeLSQL(tt.input)
+			if err != nil {
+				t.Fatal(err)
+			}
 
-		if got != want {
-			t.Fatalf("got %q, want %q", got, want)
-		}
-	}
+			if got != tt.expected {
+				t.Errorf(
+					"got SQL %q, want %q",
+					got,
+					tt.expected,
+				)
+			}
 
-	_, err := input.ReadLine()
-	if !errors.Is(err, io.EOF) {
-		t.Fatalf("expected EOF, got %v", err)
+			if complete != tt.complete {
+				t.Errorf(
+					"got complete=%v, want %v",
+					complete,
+					tt.complete,
+				)
+			}
+		})
 	}
 }

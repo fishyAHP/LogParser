@@ -6,10 +6,15 @@ import (
 	"net"
 	"os"
 	"strings"
+	"time"
 	"unicode"
 )
 
-var ErrUnknownCommand = errors.New("unknown command")
+var (
+	ErrUnknownCommand = errors.New("unknown command")
+
+	ErrMultipleStatements = errors.New("only one SQL statement is supported")
+)
 
 func splitCommand(line string) (string, string) {
 	line = strings.TrimSpace(line)
@@ -44,13 +49,19 @@ func (c *CLI) execute(line string) (bool, error) {
 	case "help":
 		return false, c.help()
 
-	case "exit", "quit":
+	case "exit", "quit", "q":
 		return true, nil
 
 	case "query":
 		return false, errors.New(
 			"SQL queries must be handled by the REPL",
 		)
+
+	case "mode":
+		return false, c.setOutputMode(argument)
+
+	case "timer":
+		return false, c.setTimer(argument)
 
 	default:
 		return false, fmt.Errorf(
@@ -69,7 +80,7 @@ func (c *CLI) help() error {
   ingest-file <PATH>   Ingest logs from file
   ingest-tcp <ADDR>    Ingest logs from TCP connection
   help                 Show available commands
-  exit                 Exit LogParser
+  exit, quit, q        Exit LogParser
 
 Terminal:
   Up / Down            Command history
@@ -78,13 +89,12 @@ Terminal:
   Ctrl+C               Cancel current input
   Ctrl+D               Exit
 
-Example:
-  query SELECT COUNT(*) WHERE level="ERROR";
-
-Multiline query:
-  query SELECT timestamp, message
-  WHERE level="ERROR"
-  LIMIT 10;`)
+Output:
+  mode json          Print results as JSON
+  mode table         Print results as a table
+  timer on           Show query execution time
+  timer off          Hide query execution time
+`)
 
 	return err
 }
@@ -171,9 +181,22 @@ func (c *CLI) ingestTCP(
 	return nil
 }
 
-func (c *CLI) query(sql string) error {
+func (c *CLI) query(sql string) (retErr error) {
 	if strings.TrimSpace(sql) == "" {
 		return errors.New("expected SQL query")
+	}
+
+	start := time.Now()
+
+	if c.timer {
+		defer func() {
+			_, err := fmt.Fprintf(
+				c.out,
+				"Execution time: %s\n",
+				time.Since(start).Round(time.Microsecond),
+			)
+			retErr = errors.Join(retErr, err)
+		}()
 	}
 
 	rows, err := c.service.Query(sql)
@@ -182,40 +205,84 @@ func (c *CLI) query(sql string) error {
 	}
 
 	count := 0
+	truncated := false
 
-	for data, err := range rows {
-		if err != nil {
+	switch c.mode {
+	case OutputJSON:
+		for data, err := range rows {
+			if err != nil {
+				return fmt.Errorf(
+					"read query result: %w", err,
+				)
+			}
+
+			if _, err := fmt.Fprintln(
+				c.out,
+				string(data),
+			); err != nil {
+				return fmt.Errorf(
+					"write result: %w", err,
+				)
+			}
+
+			count++
+		}
+
+	case OutputTable:
+		table := NewTablePrinter()
+
+		for data, err := range rows {
+			if err != nil {
+				return fmt.Errorf(
+					"read query result: %w", err,
+				)
+			}
+
+			if count == maxTableRows {
+				truncated = true
+				break
+			}
+
+			if err := table.AddRow(data); err != nil {
+				return err
+			}
+
+			count++
+		}
+
+		if err := table.Print(c.out); err != nil {
 			return fmt.Errorf(
-				"read query result: %w",
-				err,
+				"print table: %w", err,
 			)
 		}
 
-		if _, err := fmt.Fprintln(
-			c.out,
-			string(data),
-		); err != nil {
-			return fmt.Errorf(
-				"write query result: %w",
-				err,
-			)
-		}
-
-		count++
+	default:
+		return fmt.Errorf(
+			"unknown output mode: %s",
+			c.mode,
+		)
 	}
 
-	_, err = fmt.Fprintf(
+	if _, err := fmt.Fprintf(
 		c.out,
-		"(%d rows affected)\n",
+		"\n(%d rows displayed)\n",
 		count,
-	)
+	); err != nil {
+		return err
+	}
 
-	return err
+	if truncated {
+		_, err := fmt.Fprintf(
+			c.out,
+			"Output truncated after %d rows. "+
+				"Use LIMIT in SQL to restrict results.\n",
+			maxTableRows,
+		)
+		return err
+	}
+
+	return nil
 }
-
-var ErrMultipleStatements = errors.New(
-	"only one SQL statement is supported",
-)
 
 func completeLSQL(
 	source string,
@@ -232,7 +299,6 @@ func completeLSQL(
 			}
 
 			if ch == quote {
-				// SQL-style doubled quotes.
 				if i+1 < len(source) &&
 					source[i+1] == quote {
 					i++
@@ -250,12 +316,67 @@ func completeLSQL(
 
 		case ';':
 			if strings.TrimSpace(source[i+1:]) != "" {
-				return "", false, ErrMultipleStatements
+				return "",
+					false,
+					ErrMultipleStatements
 			}
 
-			return strings.TrimSpace(source[:i]), true, nil
+			return strings.TrimSpace(source[:i]),
+				true,
+				nil
 		}
 	}
 
 	return "", false, nil
+}
+
+func (c *CLI) setOutputMode(argument string) error {
+	switch strings.ToLower(strings.TrimSpace(argument)) {
+	case "json":
+		c.mode = OutputJSON
+
+	case "table":
+		c.mode = OutputTable
+
+	default:
+		return fmt.Errorf(
+			"unknown output mode %q: expected json or table",
+			argument,
+		)
+	}
+
+	_, err := fmt.Fprintf(
+		c.out,
+		"Output mode: %s\n",
+		c.mode,
+	)
+	return err
+}
+
+func (c *CLI) setTimer(argument string) error {
+	switch strings.ToLower(strings.TrimSpace(argument)) {
+	case "on":
+		c.timer = true
+
+	case "off":
+		c.timer = false
+
+	default:
+		return fmt.Errorf(
+			"invalid timer value %q: expected on or off",
+			argument,
+		)
+	}
+
+	status := "disabled"
+	if c.timer {
+		status = "enabled"
+	}
+
+	_, err := fmt.Fprintf(
+		c.out,
+		"Timer %s\n",
+		status,
+	)
+	return err
 }
