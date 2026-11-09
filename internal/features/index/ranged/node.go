@@ -16,7 +16,7 @@ const (
 
 type node[K comparable] struct {
 	key     K
-	records *records
+	records records
 
 	left, right *node[K]
 	parent      *node[K]
@@ -36,19 +36,17 @@ func newNodeWithPosting[K comparable](
 	key K,
 	posting *structs.PostingList,
 ) *node[K] {
-	rec := &records{}
+	n := &node[K]{}
 
 	if posting.Len() == 1 {
-		rec.single = posting.At(0)
+		n.records.single = posting.At(0)
 	} else {
-		rec.many = posting
+		n.records.many = posting
 	}
 
-	return &node[K]{
-		key:     key,
-		records: rec,
-		color:   Red,
-	}
+	n.key = key
+	n.color = Red
+	return n
 }
 
 func (n *node[K]) add(value domain.RecordID) bool {
@@ -70,8 +68,8 @@ type records struct {
 	many   *structs.PostingList
 }
 
-func newRecs(id domain.RecordID) *records {
-	return &records{
+func newRecs(id domain.RecordID) records {
+	return records{
 		single: id,
 	}
 }

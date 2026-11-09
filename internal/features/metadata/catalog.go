@@ -2,6 +2,7 @@ package metadata
 
 import (
 	"fmt"
+	"maps"
 	"math"
 	"sort"
 	"sync"
@@ -194,4 +195,23 @@ func (f *FieldsCatalog) UnmarshalBinary(data []byte) error {
 	f.mtx.Unlock()
 
 	return nil
+}
+
+func (f *FieldsCatalog) ReplaceFrom(
+	other *FieldsCatalog,
+) {
+	if f == other {
+		return
+	}
+
+	other.mtx.RLock()
+
+	catalog := make(map[string]uint64, len(other.catalog))
+	maps.Copy(catalog, other.catalog)
+
+	other.mtx.RUnlock()
+
+	f.mtx.Lock()
+	f.catalog = catalog
+	f.mtx.Unlock()
 }

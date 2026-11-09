@@ -8,7 +8,7 @@ import (
 
 type heapItem struct {
 	id      domain.RecordID
-	records *records
+	records records
 	pos     int
 }
 
@@ -83,7 +83,7 @@ func (m *mergeHeap) len() int {
 }
 
 func merge(
-	sources iter.Seq[*records],
+	sources iter.Seq[records],
 ) iter.Seq[domain.RecordID] {
 	return func(yield func(domain.RecordID) bool) {
 		h := make(mergeHeap, 0)

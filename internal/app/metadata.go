@@ -141,7 +141,7 @@ func (m *Metadata) FromSnapshots(
 		)
 	}
 
-	m.catalog = tmpCatalog
+	m.catalog.ReplaceFrom(tmpCatalog)
 
 	return nil
 }
