@@ -5,33 +5,31 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
-	"net"
 	"os"
 	"strings"
-	"unicode"
+	"sync"
 
 	"fishyAHP/LogParser.git/internal/app"
 	"fishyAHP/LogParser.git/internal/core/domain"
 	"github.com/chzyer/readline"
 )
 
-var ErrUnknownCommand = errors.New("unknown command")
-
 type Input interface {
-	ReadLine() (string, error)
-	io.Closer
+	ReadLine(
+		prompt string,
+	) (string, error)
+	Close() error
 }
 
 type CLI struct {
 	service *app.Service
-
-	input Input
+	input   Input
 
 	out    io.Writer
 	errOut io.Writer
 
-	logs <-chan string
+	closeOnce sync.Once
+	closeErr  error
 }
 
 func New(
@@ -39,7 +37,7 @@ func New(
 	out io.Writer,
 	errOut io.Writer,
 ) (*CLI, error) {
-	service, err := app.NewService(&domain.Scheme{
+	scheme := &domain.Scheme{
 		Separator: ',',
 		Parameters: []domain.Field{
 			{
@@ -63,29 +61,33 @@ func New(
 				IndexType: domain.RangeIndex,
 			},
 		},
-	},
+	}
+
+	service, err := app.NewService(
+		scheme,
 		domain.JSON,
 		".storage",
 	)
-
 	if err != nil {
 		return nil, err
 	}
 
-	var input Input = NewBasicInput(in)
+	var input Input = NewBasicInput(in, out)
 
 	if file, ok := in.(*os.File); ok &&
 		readline.IsTerminal(int(file.Fd())) {
 
-		terminal, err := NewTerminalInput(in, out, errOut)
+		input, err = NewTerminalInput(
+			in,
+			out,
+			errOut,
+		)
 		if err != nil {
 			return nil, errors.Join(
 				err,
 				service.Close(),
 			)
 		}
-
-		input = terminal
 	}
 
 	return &CLI{
@@ -96,62 +98,114 @@ func New(
 	}, nil
 }
 
-type InputResult struct {
-	line string
-	err  error
-}
-
-func (c *CLI) ReadInput(
-	ctx context.Context,
-	ch chan<- InputResult,
-) {
-	defer close(ch)
+func (c *CLI) Run(ctx context.Context) error {
+	var pendingSQL strings.Builder
+	collectingSQL := false
 
 	for {
-		line, err := c.input.ReadLine()
-
-		if errors.Is(err, io.EOF) {
-			return
-		}
-
-		result := InputResult{
-			line: line,
-			err:  err,
-		}
-
-		select {
-		case <-ctx.Done():
-			return
-
-		case ch <- result:
-		}
-
-		if err != nil {
-			return
-		}
-	}
-}
-
-func (c *CLI) Run(
-	ctx context.Context,
-) error {
-	for {
-		if err := ctx.Err(); err != nil {
+		if ctx.Err() != nil {
 			return nil
 		}
 
-		line, err := c.input.ReadLine()
+		prompt := "logparser> "
+		if collectingSQL {
+			prompt = "       ... "
+		}
+
+		line, err := c.input.ReadLine(prompt)
+
+		if errors.Is(err, readline.ErrInterrupt) {
+			if collectingSQL {
+				pendingSQL.Reset()
+				collectingSQL = false
+
+				fmt.Fprintln(c.out, "Query canceled")
+				continue
+			}
+
+			return nil
+		}
+
+		if errors.Is(err, io.EOF) {
+			if collectingSQL {
+				return errors.New(
+					"unexpected EOF: unfinished SQL query",
+				)
+			}
+			return nil
+		}
 
 		if err != nil {
-			if errors.Is(err, io.EOF) {
+			if ctx.Err() != nil {
 				return nil
 			}
-			return err
+			return fmt.Errorf("read input: %w", err)
+		}
+
+		if collectingSQL {
+			pendingSQL.WriteByte('\n')
+			pendingSQL.WriteString(line)
+
+			sql, complete, err := completeLSQL(
+				pendingSQL.String(),
+			)
+			if err != nil {
+				c.printCommandError(err)
+				pendingSQL.Reset()
+				collectingSQL = false
+				continue
+			}
+
+			if !complete {
+				continue
+			}
+
+			pendingSQL.Reset()
+			collectingSQL = false
+
+			c.printCommandError(c.query(sql))
+			continue
+		}
+
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+
+		command, argument := splitCommand(line)
+
+		if strings.EqualFold(command, "query") {
+			if argument == "" {
+				c.printCommandError(
+					errors.New("expected SQL query"),
+				)
+				continue
+			}
+
+			pendingSQL.WriteString(argument)
+
+			sql, complete, err := completeLSQL(
+				pendingSQL.String(),
+			)
+			if err != nil {
+				c.printCommandError(err)
+				pendingSQL.Reset()
+				continue
+			}
+
+			if !complete {
+				collectingSQL = true
+				continue
+			}
+
+			pendingSQL.Reset()
+			c.printCommandError(c.query(sql))
+			continue
 		}
 
 		exit, err := c.execute(line)
 		if err != nil {
-			fmt.Fprintln(c.errOut, "Error: ", err)
+			c.printCommandError(err)
 			continue
 		}
 
@@ -161,156 +215,19 @@ func (c *CLI) Run(
 	}
 }
 
-func (c *CLI) execute(line string) (bool, error) {
-	line = strings.TrimSpace(line)
-	if line == "" {
-		return false, nil
-	}
-
-	idx := strings.IndexFunc(line, unicode.IsSpace)
-
-	command := line
-	argument := ""
-
-	if idx >= 0 {
-		command = line[:idx]
-		argument = strings.TrimSpace(line[idx:])
-	}
-
-	switch strings.ToLower(command) {
-	case "ingest":
-		return false, c.ingest(argument)
-
-	case "ingest-file":
-		return false, c.ingestFile(argument)
-
-	case "ingest-tcp":
-		return false, c.ingestTCP(argument)
-
-	case "query":
-		return false, c.query(argument)
-
-	case "exit":
-		return true, nil
-
-	default:
-		return false, fmt.Errorf(
-			"%w: %q",
-			ErrUnknownCommand,
-			command,
-		)
-	}
-}
-
-func (c *CLI) ingest(raw string) error {
-	if strings.TrimSpace(raw) == "" {
-		return errors.New(
-			"expect not empty argument",
-		)
-	}
-
-	bytes := []byte(raw)
-	err := c.service.Ingest(bytes)
+func (c *CLI) printCommandError(err error) {
 	if err != nil {
-		return fmt.Errorf(
-			"ingest: %w",
-			err,
-		)
+		fmt.Fprintln(c.errOut, "Error:", err)
 	}
-	return nil
-}
-
-func (c *CLI) ingestFile(path string) error {
-	if strings.TrimSpace(path) == "" {
-		return errors.New(
-			"expected path file",
-		)
-	}
-
-	file, err := os.Open(path)
-	if err != nil {
-		return fmt.Errorf(
-			"open file %s: %w",
-			path,
-			err,
-		)
-	}
-	defer func() {
-		if err = file.Close(); err != nil {
-			log.Fatal(err)
-		}
-	}()
-
-	if err = c.service.IngestReader(file); err != nil {
-		return fmt.Errorf(
-			"ingest file %s: %w",
-			path,
-			err,
-		)
-	}
-	return nil
-}
-
-func (c *CLI) ingestTCP(address string) error {
-	if strings.TrimSpace(address) == "" {
-		return errors.New(
-			"expected tcp address",
-		)
-	}
-
-	conn, err := net.Dial("tcp", address)
-	if err != nil {
-		return fmt.Errorf(
-			"connect to %s: %w",
-			address,
-			err,
-		)
-	}
-
-	defer func() {
-		if err = conn.Close(); err != nil {
-			log.Fatal(err)
-		}
-	}()
-
-	if err = c.service.IngestReader(conn); err != nil {
-		return fmt.Errorf(
-			"ingest TCP %q: %w",
-			address,
-			err,
-		)
-	}
-	return nil
-}
-
-func (c *CLI) query(query string) error {
-	if strings.TrimSpace(query) == "" {
-		return errors.New(
-			"expect not empty argument",
-		)
-	}
-
-	rows, err := c.service.Query(query)
-	if err != nil {
-		return fmt.Errorf(
-			"query %q: %w",
-			query,
-			err,
-		)
-	}
-
-	for data, err := range rows {
-		if err != nil {
-			return err
-		}
-		fmt.Fprintln(c.out, string(data))
-	}
-	return nil
 }
 
 func (c *CLI) Close() error {
-	return errors.Join(
-		c.input.Close(),
-		c.service.Close(),
-	)
+	c.closeOnce.Do(func() {
+		c.closeErr = errors.Join(
+			c.input.Close(),
+			c.service.Close(),
+		)
+	})
+
+	return c.closeErr
 }
