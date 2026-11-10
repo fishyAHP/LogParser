@@ -199,7 +199,7 @@ func (c *CLI) query(sql string) (retErr error) {
 		}()
 	}
 
-	rows, err := c.service.Query(sql)
+	rows, columns, err := c.service.QueryWithColumns(sql)
 	if err != nil {
 		return fmt.Errorf("execute query: %w", err)
 	}
@@ -229,7 +229,7 @@ func (c *CLI) query(sql string) (retErr error) {
 		}
 
 	case OutputTable:
-		table := NewTablePrinter()
+		table := NewTablePrinter(columns...)
 
 		for data, err := range rows {
 			if err != nil {

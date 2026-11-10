@@ -62,15 +62,15 @@ func NewEngine(
 func (e *Engine) Query(
 	q string,
 ) (iterators.Rows, error) {
-	result, err := e.executor.Execute(q)
+	rows, _, err := e.QueryWithColumns(q)
 	if err != nil {
 		return nil, fmt.Errorf(
-			"execute query: %w",
+			"query columns: %w",
 			err,
 		)
 	}
 
-	return e.buildIterators(result)
+	return rows, nil
 }
 
 func (e *Engine) buildIterators(
@@ -229,4 +229,47 @@ func (e *Engine) newAggregator(
 			field.Func,
 		)
 	}
+}
+
+func (e *Engine) QueryWithColumns(
+	q string,
+) (iterators.Rows, []string, error) {
+	result, err := e.executor.Execute(q)
+	if err != nil {
+		return nil, nil, fmt.Errorf(
+			"execute query: %w",
+			err,
+		)
+	}
+
+	rows, err := e.buildIterators(result)
+	if err != nil {
+		return nil, nil, fmt.Errorf(
+			"build iterators: %w",
+			err,
+		)
+	}
+
+	columns := make([]string, 0, len(result.Fields))
+
+	for _, field := range result.Fields {
+		switch v := field.(type) {
+		case execution.SelectedField:
+			columns = append(columns, string(v))
+
+		case execution.SelectAggregate:
+			columns = append(
+				columns,
+				fmt.Sprintf(
+					"%s(%s)",
+					v.Func,
+					v.Field),
+			)
+
+		case execution.SelectWildCard:
+			return rows, nil, nil
+		}
+	}
+
+	return rows, columns, nil
 }

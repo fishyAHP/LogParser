@@ -22,16 +22,30 @@ const (
 )
 
 type TablePrinter struct {
-	rows    []map[string]string
-	columns []string
-	seen    map[string]struct{}
+	rows         []map[string]string
+	columns      []string
+	seen         map[string]struct{}
+	fixedColumns bool
 }
 
-func NewTablePrinter() *TablePrinter {
-	return &TablePrinter{
+func NewTablePrinter(columns ...string) *TablePrinter {
+	t := &TablePrinter{
 		rows: make([]map[string]string, 0, maxTableRows),
 		seen: make(map[string]struct{}),
 	}
+
+	for _, name := range columns {
+		if _, exists := t.seen[name]; exists {
+			continue
+		}
+
+		t.seen[name] = struct{}{}
+		t.columns = append(t.columns, name)
+	}
+
+	t.fixedColumns = len(columns) > 0
+
+	return t
 }
 
 func (t *TablePrinter) AddRow(data []byte) error {
@@ -66,9 +80,11 @@ func (t *TablePrinter) AddRow(data []byte) error {
 
 		row[name] = cell
 
-		if _, exists := t.seen[name]; !exists {
-			t.seen[name] = struct{}{}
-			t.columns = append(t.columns, name)
+		if !t.fixedColumns {
+			if _, exists := t.seen[name]; !exists {
+				t.seen[name] = struct{}{}
+				t.columns = append(t.columns, name)
+			}
 		}
 	}
 
@@ -81,7 +97,9 @@ func (t *TablePrinter) Print(out io.Writer) error {
 		return nil
 	}
 
-	sort.Strings(t.columns)
+	if !t.fixedColumns {
+		sort.Strings(t.columns)
+	}
 
 	columns := append(
 		[]string{"№"},

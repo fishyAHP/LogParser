@@ -162,7 +162,7 @@ func (s *Service) rebuildMetadata() error {
 
 	if err := s.metadata.Load(); err != nil {
 		if !errors.Is(err, snapshot.ErrNoSnapshots) &&
-			!errors.Is(err, snapshot.ErrNoValidSnapshots){
+			!errors.Is(err, snapshot.ErrNoValidSnapshots) {
 			return fmt.Errorf(
 				"load indexes: %w",
 				err,
@@ -183,7 +183,7 @@ func (s *Service) rebuildMetadata() error {
 
 	fmt.Printf("Loaded checkpoint: %d\n", lastIndexedID)
 
-	iter, err := s.storage.IteratorFromID(lastIndexedID+1)
+	iter, err := s.storage.IteratorFromID(lastIndexedID + 1)
 	if err != nil {
 		return fmt.Errorf(
 			"create iterator from id: %w",
@@ -293,16 +293,32 @@ func (s *Service) IngestReader(reader io.Reader) error {
 	return nil
 }
 
-func (s *Service) Query(q string) (iterators.Rows, error) {
+func (s *Service) Query(
+	q string,
+) (iterators.Rows, error) {
 	rows, err := s.engine.Query(q)
 	if err != nil {
 		return nil, fmt.Errorf(
-			"executing raw: %w",
+			"executing query: %w",
 			err,
 		)
 	}
 
 	return rows, nil
+}
+
+func (s *Service) QueryWithColumns(
+	q string,
+) (iterators.Rows, []string, error) {
+	rows, columns, err := s.engine.QueryWithColumns(q)
+	if err != nil {
+		return nil, nil, fmt.Errorf(
+			"executing query with column: %w",
+			err,
+		)
+	}
+
+	return rows, columns, nil
 }
 
 func (s *Service) Close() error {

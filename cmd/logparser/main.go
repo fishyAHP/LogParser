@@ -26,7 +26,7 @@ func run() (runErr error) {
 	}
 
 	defer func() {
-		if err := c.Close(); err != nil {
+		if err = c.Close(); err != nil {
 			runErr = errors.Join(runErr, err)
 		}
 	}()
@@ -38,11 +38,11 @@ func run() (runErr error) {
 	)
 	defer cancel()
 
-	if err := c.Run(ctx); err != nil {
+	if err = c.Run(ctx); err != nil {
 		return err
 	}
 
-	if err := writeHeapProfile("heap.pprof"); err != nil {
+	if err = writeHeapProfile("heap.pprof"); err != nil {
 		return err
 	}
 
