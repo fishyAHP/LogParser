@@ -63,6 +63,8 @@ func (c *CLI) execute(line string) (bool, error) {
 	case "timer":
 		return false, c.setTimer(argument)
 
+	case "stats":
+		return false, c.stats()
 	default:
 		return false, fmt.Errorf(
 			"%w: %q",
@@ -81,6 +83,7 @@ func (c *CLI) help() error {
   ingest-tcp <ADDR>    Ingest logs from TCP connection
   help                 Show available commands
   exit, quit, q        Exit LogParser
+  stats                Show storage and index statistics
 
 Terminal:
   Up / Down            Command history
@@ -379,4 +382,57 @@ func (c *CLI) setTimer(argument string) error {
 		status,
 	)
 	return err
+}
+
+func (c *CLI) stats() error {
+	stats, err := c.service.Stats()
+	if err != nil {
+		return fmt.Errorf("get statistics: %w", err)
+	}
+
+	_, err = fmt.Fprintf(
+		c.out,
+		"\nStorage\n"+
+			"  Records              %d\n"+
+			"  Segments             %d\n"+
+			"  Disk usage           %s\n"+
+			"  Record pointers      %d\n"+
+			"  Pointer capacity     %d\n"+
+			"\nIndexes\n"+
+			"  Configured           %d\n"+
+			"\nSnapshots\n"+
+			"  Checkpoint           %d\n"+
+			"  Pending records      %d\n\n",
+		stats.Storage.Records,
+		stats.Storage.Segments,
+		formatBytes(stats.Storage.DiskBytes),
+		stats.Storage.PointerCount,
+		stats.Storage.PointerCapacity,
+		stats.Indexes,
+		stats.Checkpoint,
+		stats.PendingRecords,
+	)
+
+	return err
+}
+
+const unit = 1024
+
+func formatBytes(size int64) string {
+	if size < unit {
+		return fmt.Sprintf("%d B", size)
+	}
+
+	value := float64(size)
+	units := []string{"KiB", "MiB", "GiB", "TiB"}
+
+	for _, suffix := range units {
+		value /= unit
+
+		if value < unit || suffix == "TiB" {
+			return fmt.Sprintf("%.2f %s", value, suffix)
+		}
+	}
+
+	return fmt.Sprintf("%d B", size)
 }

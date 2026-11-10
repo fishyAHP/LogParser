@@ -351,3 +351,43 @@ func (s *Service) Save() error {
 
 	return nil
 }
+
+type Stats struct {
+	Storage storage.Stats
+
+	Indexes        int
+	Checkpoint     domain.RecordID
+	PendingRecords uint64
+}
+
+func (s *Service) Stats() (Stats, error) {
+	storageStats, err := s.storage.Stats()
+	if err != nil {
+		return Stats{}, fmt.Errorf(
+			"storage stats: %w",
+			err,
+		)
+	}
+
+	indexCount := 0
+
+	for _, field := range s.index.Scheme().Parameters {
+		if field.IndexType != domain.NoIndex {
+			indexCount++
+		}
+	}
+
+	checkpoint := s.metadata.Checkpoint()
+
+	var pending uint64
+	if s.lastIndexedID > checkpoint {
+		pending = uint64(s.lastIndexedID - checkpoint)
+	}
+
+	return Stats{
+		Storage:        storageStats,
+		Indexes:        indexCount,
+		Checkpoint:     checkpoint,
+		PendingRecords: pending,
+	}, nil
+}
